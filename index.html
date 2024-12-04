@@ -3,114 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de Código de Barras</title>
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <title>Scanner de Código de Barras</title>
     <style>
         body {
             margin: 0;
-            padding: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
             font-family: Arial, sans-serif;
         }
-        
-        #reader {
+
+        #video {
             width: 100%;
             max-width: 600px;
-            margin: 0 auto;
-            border: 1px solid #ccc;
-            padding: 10px;
-            display: none; /* Inicialmente oculto */
-        }
-
-        #reader video {
-            width: 100% !important;
-        }
-
-        .buttons {
-            margin: 15px 0;
-            text-align: center;
+            margin: 20px 0;
         }
 
         button {
             padding: 10px 20px;
-            margin: 5px;
             background-color: #007bff;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-size: 16px;
         }
 
-        button:disabled {
-            background-color: #ccc;
-        }
-
-        #status-message {
-            text-align: center;
+        #status {
             margin: 10px 0;
-            padding: 10px;
-            border-radius: 5px;
-        }
-
-        .error {
-            background-color: #ffebee;
-            color: #c62828;
-        }
-
-        .success {
-            background-color: #e8f5e9;
-            color: #2e7d32;
-        }
-
-        .info {
-            background-color: #e3f2fd;
-            color: #1565c0;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <h1>Leitor de Código de Barras</h1>
-    <div id="status-message" class="info">
-        Clique em "Iniciar Scanner" para começar
-    </div>
-    <div class="buttons">
-        <button id="startButton">Iniciar Scanner</button>
-        <button id="stopButton" disabled>Parar Scanner</button>
-    </div>
-    <div id="reader"></div>
+    <h1>Scanner de Código de Barras</h1>
+    <button id="startButton">Iniciar Scanner</button>
+    <div id="status">Clique no botão para iniciar</div>
+    <video id="video" autoplay playsinline></video>
+
     <script>
-        function initScanner() {
-            if (typeof Html5QrcodeScanner === 'undefined') {
-                console.error('Biblioteca HTML5-QRCode não carregada');
-                document.getElementById('status-message').innerHTML = 
-                    'Erro: Biblioteca não carregada. Tente recarregar a página.';
-                return;
+        const video = document.getElementById('video');
+        const startButton = document.getElementById('startButton');
+        const status = document.getElementById('status');
+        let stream = null;
+
+        startButton.addEventListener('click', async () => {
+            try {
+                // Solicita acesso à câmera
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+                video.srcObject = stream;
+
+                // Inicia o scanner
+                const scanner = async () => {
+                    if ('BarcodeDetector' in window) {
+                        const barcodeDetector = new BarcodeDetector({
+                            formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+                        });
+
+                        try {
+                            const barcodes = await barcodeDetector.detect(video);
+                            if (barcodes.length > 0) {
+                                // Código de barras detectado
+                                const serial = barcodes[0].rawValue;
+                                
+                                // Para a câmera
+                                if (stream) {
+                                    stream.getTracks().forEach(track => track.stop());
+                                }
+                                
+                                // Redireciona para o formulário
+                                window.location.href = `/form?serial=${encodeURIComponent(serial)}`;
+                                return;
+                            }
+                        } catch (err) {
+                            console.error('Erro na leitura:', err);
+                        }
+                    } else {
+                        status.textContent = 'Seu navegador não suporta leitura de código de barras';
+                        return;
+                    }
+                    
+                    // Continua escaneando
+                    requestAnimationFrame(scanner);
+                };
+
+                scanner();
+                status.textContent = 'Aponte a câmera para o código de barras';
+                startButton.style.display = 'none';
+
+            } catch (err) {
+                status.textContent = 'Erro ao acessar a câmera. Verifique as permissões.';
+                console.error(err);
             }
-
-            const html5QrcodeScanner = new Html5QrcodeScanner(
-                "reader",
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 },
-                    aspectRatio: 1.0,
-                    rememberLastUsedCamera: true,
-                    showTorchButtonIfSupported: true
-                },
-                /* verbose= */ false
-            );
-
-            function onScanSuccess(decodedText, decodedResult) {
-                console.log(`Código lido: ${decodedText}`, decodedResult);
-                window.location.href = `/form?serial=${encodeURIComponent(decodedText)}`;
-            }
-
-            html5QrcodeScanner.render(onScanSuccess);
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initScanner);
-        } else {
-            initScanner();
-        }
+        });
     </script>
 </body>
 </html>
