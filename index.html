@@ -359,12 +359,16 @@
                 code = code.trim();
                 
                 // Procura especificamente por padrões que começam com NS
-                const nsPattern = /NS[S]?[^0-9A-Z]*([0-9A-Z]+)/i;
+                // Agora captura o S inicial se existir
+                const nsPattern = /NS([S]?[^0-9A-Z]*)([0-9A-Z]+)/i;
                 const match = code.match(nsPattern);
                 
-                if (match && match[1]) {
-                    // Pega exatamente 13 caracteres para o serial
-                    const serial = match[1].substring(0, 13);
+                if (match) {
+                    // Combina o S (se existir) com o resto do serial
+                    const sPrefix = match[1] ? 'S' : '';
+                    const numbers = match[2];
+                    const serial = sPrefix + numbers;
+                    
                     // Verifica se tem exatamente 13 caracteres
                     if (serial.length === 13) {
                         return serial;
