@@ -121,8 +121,14 @@
 
         async function checkSerial(serial) {
             try {
-                const response = await fetch(`https://script.google.com/macros/s/AKfycbzSTo0--es4x1VDf5UGrDmXe2fCfhwGf37ZqrxhQsVBav245XHd40IMgimfgL4CfFKfWw/exec?serial=${encodeURIComponent(serial)}`);
+                console.log('Verificando serial:', serial);
+                const url = `https://script.google.com/macros/s/AKfycbzSTo0--es4x1VDf5UGrDmXe2fCfhwGf37ZqrxhQsVBav245XHd40IMgimfgL4CfFKfWw/exec?serial=${encodeURIComponent(serial)}`;
+                
+                const response = await fetch(url);
+                console.log('Resposta recebida:', response);
+                
                 const data = await response.json();
+                console.log('Dados recebidos:', data);
                 
                 const statusDiv = document.getElementById('serialStatus');
                 if (data.exists) {
