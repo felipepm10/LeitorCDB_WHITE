@@ -363,10 +363,10 @@
                 const match = code.match(nsPattern);
                 
                 if (match && match[1]) {
-                    // Pega exatamente 11 caracteres para o serial
-                    const serial = match[1].substring(0, 11);
-                    // Verifica se tem exatamente 11 caracteres
-                    if (serial.length === 11) {
+                    // Pega exatamente 13 caracteres para o serial
+                    const serial = match[1].substring(0, 13);
+                    // Verifica se tem exatamente 13 caracteres
+                    if (serial.length === 13) {
                         return serial;
                     }
                 }
