@@ -188,10 +188,73 @@
             loadingIndicator.style.display = 'block';
             try {
                 const codeReader = new ZXing.BrowserMultiFormatReader();
-                const result = await codeReader.decodeFromImage(previewImage);
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
                 
-                if (result) {
-                    handleSuccess([result.text]);
+                // Usa o tamanho original da imagem
+                canvas.width = previewImage.naturalWidth;
+                canvas.height = previewImage.naturalHeight;
+                ctx.drawImage(previewImage, 0, 0);
+
+                // Array para armazenar todos os códigos encontrados
+                let allCodes = new Set();
+
+                // Tenta diferentes escalas para melhorar a detecção
+                const scales = [1, 1.5, 0.75];
+                
+                for (let scale of scales) {
+                    try {
+                        const scaledCanvas = document.createElement('canvas');
+                        const sctx = scaledCanvas.getContext('2d');
+                        scaledCanvas.width = canvas.width * scale;
+                        scaledCanvas.height = canvas.height * scale;
+                        sctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+                        // Tenta ler a imagem várias vezes com diferentes configurações
+                        const hints = new Map();
+                        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                            ZXing.BarcodeFormat.EAN_13,
+                            ZXing.BarcodeFormat.EAN_8,
+                            ZXing.BarcodeFormat.CODE_128,
+                            ZXing.BarcodeFormat.CODE_39,
+                            ZXing.BarcodeFormat.UPC_A,
+                            ZXing.BarcodeFormat.UPC_E
+                        ]);
+                        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                        
+                        const reader = new ZXing.BrowserMultiFormatReader(hints);
+                        
+                        try {
+                            const result = await reader.decodeFromImage(scaledCanvas);
+                            if (result) {
+                                allCodes.add(result.text);
+                            }
+                        } catch (err) {
+                            // Ignora erros de leitura individual
+                            console.debug('Tentativa falhou:', err);
+                        }
+
+                        // Tenta novamente com diferentes configurações
+                        hints.set(ZXing.DecodeHintType.TRY_HARDER, false);
+                        const reader2 = new ZXing.BrowserMultiFormatReader(hints);
+                        
+                        try {
+                            const result = await reader2.decodeFromImage(scaledCanvas);
+                            if (result) {
+                                allCodes.add(result.text);
+                            }
+                        } catch (err) {
+                            // Ignora erros de leitura individual
+                            console.debug('Tentativa alternativa falhou:', err);
+                        }
+
+                    } catch (err) {
+                        console.debug(`Erro na escala ${scale}:`, err);
+                    }
+                }
+
+                if (allCodes.size > 0) {
+                    handleSuccess(Array.from(allCodes));
                 } else {
                     status.textContent = 'Nenhum código detectado. Tente novamente.';
                 }
