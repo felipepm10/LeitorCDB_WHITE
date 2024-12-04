@@ -28,11 +28,38 @@
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
+            margin: 10px 0;
         }
 
         #status {
             margin: 10px 0;
             color: #666;
+        }
+
+        #result {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        #serialNumber {
+            font-size: 24px;
+            color: #28a745;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        #redirectButton {
+            background-color: #28a745;
+        }
+
+        #newScanButton {
+            background-color: #6c757d;
         }
     </style>
 </head>
@@ -41,22 +68,45 @@
     <button id="startButton">Iniciar Scanner</button>
     <div id="status">Clique no botão para iniciar</div>
     <video id="video" autoplay playsinline></video>
+    
+    <div id="result">
+        <h2>Código Detectado:</h2>
+        <div id="serialNumber"></div>
+        <button id="redirectButton">Ir para o Formulário</button>
+        <button id="newScanButton">Novo Scan</button>
+    </div>
 
     <script>
         const video = document.getElementById('video');
         const startButton = document.getElementById('startButton');
         const status = document.getElementById('status');
+        const result = document.getElementById('result');
+        const serialNumber = document.getElementById('serialNumber');
+        const redirectButton = document.getElementById('redirectButton');
+        const newScanButton = document.getElementById('newScanButton');
         let stream = null;
+
+        function resetUI() {
+            video.style.display = 'block';
+            result.style.display = 'none';
+            startButton.style.display = 'block';
+            status.textContent = 'Clique no botão para iniciar';
+        }
+
+        function showResult(serial) {
+            video.style.display = 'none';
+            result.style.display = 'block';
+            serialNumber.textContent = serial;
+            status.textContent = '';
+        }
 
         startButton.addEventListener('click', async () => {
             try {
-                // Solicita acesso à câmera
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: 'environment' }
                 });
                 video.srcObject = stream;
 
-                // Inicia o scanner
                 const scanner = async () => {
                     if ('BarcodeDetector' in window) {
                         const barcodeDetector = new BarcodeDetector({
@@ -66,7 +116,6 @@
                         try {
                             const barcodes = await barcodeDetector.detect(video);
                             if (barcodes.length > 0) {
-                                // Código de barras detectado
                                 const serial = barcodes[0].rawValue;
                                 
                                 // Para a câmera
@@ -74,8 +123,7 @@
                                     stream.getTracks().forEach(track => track.stop());
                                 }
                                 
-                                // Redireciona para o formulário
-                                window.location.href = `/form?serial=${encodeURIComponent(serial)}`;
+                                showResult(serial);
                                 return;
                             }
                         } catch (err) {
@@ -86,7 +134,6 @@
                         return;
                     }
                     
-                    // Continua escaneando
                     requestAnimationFrame(scanner);
                 };
 
@@ -98,6 +145,15 @@
                 status.textContent = 'Erro ao acessar a câmera. Verifique as permissões.';
                 console.error(err);
             }
+        });
+
+        redirectButton.addEventListener('click', () => {
+            const serial = serialNumber.textContent;
+            window.location.href = `/form?serial=${encodeURIComponent(serial)}`;
+        });
+
+        newScanButton.addEventListener('click', () => {
+            resetUI();
         });
     </script>
 </body>
