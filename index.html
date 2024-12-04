@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leitor de Código de Barras</title>
+    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    <style>
+        #reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Leia o Código de Barras</h1>
+    <div id="reader"></div>
+    <script>
+        function onScanSuccess(decodedText) {
+            alert(`Código lido: ${decodedText}`);
+            // Redirecionar para o formulário com o código de barras como parâmetro
+            window.location.href = `/form?serial=${decodedText}`;
+        }
+
+        function onScanFailure(error) {
+            console.warn(`Erro ao escanear: ${error}`);
+        }
+
+        const html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" }, // Usa a câmera traseira
+            {
+                fps: 10, // Taxa de quadros
+                qrbox: { width: 250, height: 250 } // Área de escaneamento
+            },
+            onScanSuccess,
+            onScanFailure
+        );
+    </script>
+</body>
+</html>
