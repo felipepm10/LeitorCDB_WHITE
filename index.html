@@ -353,28 +353,62 @@
         }
 
         function handleSuccess(codes) {
+            // Função para extrair apenas o número serial
+            function extractSerial(code) {
+                // Remove espaços em branco
+                code = code.trim();
+                
+                // Padrões possíveis: NS"12345", NS:12345, NS12345
+                const patterns = [
+                    /NS["']?(\d+)["']?/i,  // Matches NS"12345" or NS'12345'
+                    /NS:(\d+)/i,           // Matches NS:12345
+                    /NS(\d+)/i             // Matches NS12345
+                ];
+
+                for (let pattern of patterns) {
+                    const match = code.match(pattern);
+                    if (match && match[1]) {
+                        return match[1]; // Retorna apenas o número
+                    }
+                }
+
+                return code; // Se não encontrar padrão, retorna o código original
+            }
+
             previewContainer.style.display = 'none';
             result.style.display = 'block';
             const codeList = document.getElementById('codeList');
             codeList.innerHTML = '';
 
-            codes.forEach((code, index) => {
+            // Filtra e processa os códigos
+            const processedCodes = codes
+                .map(code => ({
+                    original: code,
+                    serial: extractSerial(code)
+                }))
+                .filter(item => item.serial); // Remove códigos vazios
+
+            processedCodes.forEach((item, index) => {
                 const li = document.createElement('li');
                 li.className = 'code-option';
-                li.textContent = `Código ${index + 1}: ${code}`;
+                li.textContent = `Código ${index + 1}: ${item.serial}`;
+                
+                // Adiciona o código original como título para referência
+                li.title = `Código original: ${item.original}`;
+                
                 li.addEventListener('click', () => {
                     document.querySelectorAll('.code-option').forEach(el => 
                         el.style.backgroundColor = '#fff');
                     li.style.backgroundColor = '#e8f5e9';
-                    selectedSerial = code;
+                    selectedSerial = item.serial; // Usa apenas o número serial
                 });
                 codeList.appendChild(li);
             });
 
-            if (codes.length > 0) {
+            if (processedCodes.length > 0) {
                 const firstCode = codeList.firstChild;
                 firstCode.style.backgroundColor = '#e8f5e9';
-                selectedSerial = codes[0];
+                selectedSerial = processedCodes[0].serial;
             }
         }
 
