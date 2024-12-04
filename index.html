@@ -61,17 +61,75 @@
         #newScanButton {
             background-color: #6c757d;
         }
+
+        /* Estilo para a área de escaneamento */
+        .scan-region {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .scan-area {
+            position: absolute;
+            border: 2px solid #28a745;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+            /* Ajuste estes valores para mudar o tamanho da área de scan */
+            width: 80%;
+            height: 100px;
+            left: 10%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* Estilo para lista de códigos detectados */
+        .code-list {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+
+        .code-option {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .code-option:hover {
+            background-color: #f8f9fa;
+        }
+
+        /* Adicione uma opção para escolher o modo */
+        .mode-select {
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
     <h1>Scanner de Código de Barras</h1>
+    
+    <div class="mode-select">
+        <label>
+            <input type="radio" name="scanMode" value="region" checked> Área Específica
+        </label>
+        <label>
+            <input type="radio" name="scanMode" value="multiple"> Múltiplos Códigos
+        </label>
+    </div>
+
     <button id="startButton">Iniciar Scanner</button>
     <div id="status">Clique no botão para iniciar</div>
-    <video id="video" autoplay playsinline></video>
+    
+    <div class="scan-region">
+        <video id="video" autoplay playsinline></video>
+        <div class="scan-area" id="scanArea"></div>
+    </div>
     
     <div id="result">
-        <h2>Código Detectado:</h2>
-        <div id="serialNumber"></div>
+        <h2>Código(s) Detectado(s):</h2>
+        <ul class="code-list" id="codeList"></ul>
         <button id="redirectButton">Ir para o Formulário</button>
         <button id="newScanButton">Novo Scan</button>
     </div>
@@ -86,6 +144,15 @@
         const newScanButton = document.getElementById('newScanButton');
         let stream = null;
 
+        let selectedMode = 'region';
+        document.querySelectorAll('input[name="scanMode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                selectedMode = e.target.value;
+                document.querySelector('.scan-area').style.display = 
+                    selectedMode === 'region' ? 'block' : 'none';
+            });
+        });
+
         function resetUI() {
             video.style.display = 'block';
             result.style.display = 'none';
@@ -93,10 +160,35 @@
             status.textContent = 'Clique no botão para iniciar';
         }
 
-        function showResult(serial) {
+        function showResult(codes) {
             video.style.display = 'none';
             result.style.display = 'block';
-            serialNumber.textContent = serial;
+            const codeList = document.getElementById('codeList');
+            codeList.innerHTML = '';
+
+            if (Array.isArray(codes)) {
+                codes.forEach((code, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'code-option';
+                    li.textContent = `Código ${index + 1}: ${code}`;
+                    li.addEventListener('click', () => {
+                        // Marca este código como selecionado
+                        document.querySelectorAll('.code-option').forEach(el => 
+                            el.style.backgroundColor = '#fff');
+                        li.style.backgroundColor = '#e8f5e9';
+                        selectedSerial = code;
+                    });
+                    codeList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.className = 'code-option';
+                li.textContent = codes;
+                li.style.backgroundColor = '#e8f5e9';
+                selectedSerial = codes;
+                codeList.appendChild(li);
+            }
+            
             status.textContent = '';
         }
 
@@ -116,15 +208,20 @@
                         try {
                             const barcodes = await barcodeDetector.detect(video);
                             if (barcodes.length > 0) {
-                                const serial = barcodes[0].rawValue;
-                                
-                                // Para a câmera
-                                if (stream) {
-                                    stream.getTracks().forEach(track => track.stop());
+                                if (selectedMode === 'region') {
+                                    // Modo região: pega apenas o código mais próximo do centro
+                                    const centerCode = findCenterCode(barcodes);
+                                    if (centerCode) {
+                                        stopCamera();
+                                        showResult(centerCode.rawValue);
+                                        return;
+                                    }
+                                } else if (barcodes.length >= 2) {
+                                    // Modo múltiplo: espera detectar pelo menos 2 códigos
+                                    stopCamera();
+                                    showResult(barcodes.map(code => code.rawValue));
+                                    return;
                                 }
-                                
-                                showResult(serial);
-                                return;
                             }
                         } catch (err) {
                             console.error('Erro na leitura:', err);
@@ -147,13 +244,48 @@
             }
         });
 
+        function findCenterCode(barcodes) {
+            const scanArea = document.getElementById('scanArea').getBoundingClientRect();
+            const centerX = scanArea.left + (scanArea.width / 2);
+            const centerY = scanArea.top + (scanArea.height / 2);
+
+            return barcodes.reduce((closest, current) => {
+                const currentCenter = {
+                    x: current.boundingBox.x + (current.boundingBox.width / 2),
+                    y: current.boundingBox.y + (current.boundingBox.height / 2)
+                };
+
+                const currentDistance = Math.hypot(
+                    centerX - currentCenter.x,
+                    centerY - currentCenter.y
+                );
+
+                if (!closest || currentDistance < closest.distance) {
+                    return { code: current, distance: currentDistance };
+                }
+                return closest;
+            }, null)?.code;
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        let selectedSerial = '';
+
         redirectButton.addEventListener('click', () => {
-            const serial = serialNumber.textContent;
-            window.location.href = `/form?serial=${encodeURIComponent(serial)}`;
+            if (selectedSerial) {
+                window.location.href = `/form?serial=${encodeURIComponent(selectedSerial)}`;
+            } else {
+                alert('Por favor, selecione um código');
+            }
         });
 
         newScanButton.addEventListener('click', () => {
             resetUI();
+            selectedSerial = '';
         });
     </script>
 </body>
