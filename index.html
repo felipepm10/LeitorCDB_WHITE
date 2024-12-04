@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanner de Código de Barras</title>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body {
             margin: 0;
@@ -47,41 +48,6 @@
             max-width: 600px;
         }
 
-        #serialNumber {
-            font-size: 24px;
-            color: #28a745;
-            margin: 10px 0;
-            font-weight: bold;
-        }
-
-        #redirectButton {
-            background-color: #28a745;
-        }
-
-        #newScanButton {
-            background-color: #6c757d;
-        }
-
-        /* Estilo para a área de escaneamento */
-        .scan-region {
-            position: relative;
-            width: 100%;
-            max-width: 600px;
-        }
-
-        .scan-area {
-            position: absolute;
-            border: 2px solid #28a745;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-            /* Ajuste estes valores para mudar o tamanho da área de scan */
-            width: 80%;
-            height: 100px;
-            left: 10%;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        /* Estilo para lista de códigos detectados */
         .code-list {
             list-style: none;
             padding: 0;
@@ -101,34 +67,23 @@
             background-color: #f8f9fa;
         }
 
-        /* Adicione uma opção para escolher o modo */
-        .mode-select {
-            margin: 10px 0;
+        #redirectButton {
+            background-color: #28a745;
+        }
+
+        #newScanButton {
+            background-color: #6c757d;
         }
     </style>
 </head>
 <body>
     <h1>Scanner de Código de Barras</h1>
-    
-    <div class="mode-select">
-        <label>
-            <input type="radio" name="scanMode" value="region" checked> Área Específica
-        </label>
-        <label>
-            <input type="radio" name="scanMode" value="multiple"> Múltiplos Códigos
-        </label>
-    </div>
-
     <button id="startButton">Iniciar Scanner</button>
     <div id="status">Clique no botão para iniciar</div>
-    
-    <div class="scan-region">
-        <video id="video" autoplay playsinline></video>
-        <div class="scan-area" id="scanArea"></div>
-    </div>
+    <video id="video" autoplay playsinline></video>
     
     <div id="result">
-        <h2>Código(s) Detectado(s):</h2>
+        <h2>Códigos Detectados:</h2>
         <ul class="code-list" id="codeList"></ul>
         <button id="redirectButton">Ir para o Formulário</button>
         <button id="newScanButton">Novo Scan</button>
@@ -139,143 +94,82 @@
         const startButton = document.getElementById('startButton');
         const status = document.getElementById('status');
         const result = document.getElementById('result');
-        const serialNumber = document.getElementById('serialNumber');
-        const redirectButton = document.getElementById('redirectButton');
-        const newScanButton = document.getElementById('newScanButton');
-        let stream = null;
+        let selectedSerial = '';
+        let codeReader = null;
 
-        let selectedMode = 'region';
-        document.querySelectorAll('input[name="scanMode"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                selectedMode = e.target.value;
-                document.querySelector('.scan-area').style.display = 
-                    selectedMode === 'region' ? 'block' : 'none';
-            });
-        });
+        async function initScanner() {
+            try {
+                const hints = new Map();
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                    ZXing.BarcodeFormat.EAN_13,
+                    ZXing.BarcodeFormat.EAN_8,
+                    ZXing.BarcodeFormat.CODE_128,
+                    ZXing.BarcodeFormat.CODE_39,
+                    ZXing.BarcodeFormat.UPC_A,
+                    ZXing.BarcodeFormat.UPC_E,
+                ]);
 
-        function resetUI() {
-            video.style.display = 'block';
-            result.style.display = 'none';
-            startButton.style.display = 'block';
-            status.textContent = 'Clique no botão para iniciar';
+                codeReader = new ZXing.BrowserMultiFormatReader(hints);
+                
+                status.textContent = 'Escaneando...';
+                startButton.style.display = 'none';
+                result.style.display = 'none';
+                video.style.display = 'block';
+
+                try {
+                    const deviceId = await codeReader.getVideoInputDevices()
+                        .then(devices => devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('traseira'))?.deviceId);
+
+                    const scanResult = await codeReader.decodeFromInputVideoDevice(deviceId, 'video');
+                    if (scanResult) {
+                        handleSuccess([scanResult.text]);
+                    }
+                } catch (err) {
+                    console.error('Erro na leitura:', err);
+                    status.textContent = 'Erro ao ler código. Tente novamente.';
+                    startButton.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Erro ao inicializar:', err);
+                status.textContent = 'Erro ao acessar a câmera. Verifique as permissões.';
+                startButton.style.display = 'block';
+            }
         }
 
-        function showResult(codes) {
+        function handleSuccess(codes) {
+            if (codeReader) {
+                codeReader.reset();
+            }
+
             video.style.display = 'none';
             result.style.display = 'block';
             const codeList = document.getElementById('codeList');
             codeList.innerHTML = '';
 
-            if (Array.isArray(codes)) {
-                codes.forEach((code, index) => {
-                    const li = document.createElement('li');
-                    li.className = 'code-option';
-                    li.textContent = `Código ${index + 1}: ${code}`;
-                    li.addEventListener('click', () => {
-                        // Marca este código como selecionado
-                        document.querySelectorAll('.code-option').forEach(el => 
-                            el.style.backgroundColor = '#fff');
-                        li.style.backgroundColor = '#e8f5e9';
-                        selectedSerial = code;
-                    });
-                    codeList.appendChild(li);
-                });
-            } else {
+            codes.forEach((code, index) => {
                 const li = document.createElement('li');
                 li.className = 'code-option';
-                li.textContent = codes;
-                li.style.backgroundColor = '#e8f5e9';
-                selectedSerial = codes;
-                codeList.appendChild(li);
-            }
-            
-            status.textContent = '';
-        }
-
-        startButton.addEventListener('click', async () => {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
+                li.textContent = `Código ${index + 1}: ${code}`;
+                li.addEventListener('click', () => {
+                    document.querySelectorAll('.code-option').forEach(el => 
+                        el.style.backgroundColor = '#fff');
+                    li.style.backgroundColor = '#e8f5e9';
+                    selectedSerial = code;
                 });
-                video.srcObject = stream;
+                codeList.appendChild(li);
+            });
 
-                const scanner = async () => {
-                    if ('BarcodeDetector' in window) {
-                        const barcodeDetector = new BarcodeDetector({
-                            formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-                        });
-
-                        try {
-                            const barcodes = await barcodeDetector.detect(video);
-                            if (barcodes.length > 0) {
-                                if (selectedMode === 'region') {
-                                    // Modo região: pega apenas o código mais próximo do centro
-                                    const centerCode = findCenterCode(barcodes);
-                                    if (centerCode) {
-                                        stopCamera();
-                                        showResult(centerCode.rawValue);
-                                        return;
-                                    }
-                                } else if (barcodes.length >= 2) {
-                                    // Modo múltiplo: espera detectar pelo menos 2 códigos
-                                    stopCamera();
-                                    showResult(barcodes.map(code => code.rawValue));
-                                    return;
-                                }
-                            }
-                        } catch (err) {
-                            console.error('Erro na leitura:', err);
-                        }
-                    } else {
-                        status.textContent = 'Seu navegador não suporta leitura de código de barras';
-                        return;
-                    }
-                    
-                    requestAnimationFrame(scanner);
-                };
-
-                scanner();
-                status.textContent = 'Aponte a câmera para o código de barras';
-                startButton.style.display = 'none';
-
-            } catch (err) {
-                status.textContent = 'Erro ao acessar a câmera. Verifique as permissões.';
-                console.error(err);
-            }
-        });
-
-        function findCenterCode(barcodes) {
-            const scanArea = document.getElementById('scanArea').getBoundingClientRect();
-            const centerX = scanArea.left + (scanArea.width / 2);
-            const centerY = scanArea.top + (scanArea.height / 2);
-
-            return barcodes.reduce((closest, current) => {
-                const currentCenter = {
-                    x: current.boundingBox.x + (current.boundingBox.width / 2),
-                    y: current.boundingBox.y + (current.boundingBox.height / 2)
-                };
-
-                const currentDistance = Math.hypot(
-                    centerX - currentCenter.x,
-                    centerY - currentCenter.y
-                );
-
-                if (!closest || currentDistance < closest.distance) {
-                    return { code: current, distance: currentDistance };
-                }
-                return closest;
-            }, null)?.code;
-        }
-
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+            // Seleciona o primeiro código por padrão
+            if (codes.length > 0) {
+                const firstCode = codeList.firstChild;
+                firstCode.style.backgroundColor = '#e8f5e9';
+                selectedSerial = codes[0];
             }
         }
 
-        let selectedSerial = '';
+        startButton.addEventListener('click', initScanner);
 
-        redirectButton.addEventListener('click', () => {
+        document.getElementById('redirectButton').addEventListener('click', () => {
             if (selectedSerial) {
                 window.location.href = `/form?serial=${encodeURIComponent(selectedSerial)}`;
             } else {
@@ -283,9 +177,12 @@
             }
         });
 
-        newScanButton.addEventListener('click', () => {
-            resetUI();
+        document.getElementById('newScanButton').addEventListener('click', () => {
             selectedSerial = '';
+            status.textContent = 'Clique no botão para iniciar';
+            startButton.style.display = 'block';
+            result.style.display = 'none';
+            video.style.display = 'none';
         });
     </script>
 </body>
