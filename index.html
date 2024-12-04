@@ -231,9 +231,9 @@
             loadingIndicator.style.display = 'block';
             try {
                 updateProgress('step1', 'Preparando imagem...');
-                const codeReader = new ZXing.BrowserMultiFormatReader();
+                console.log('1. Iniciando scanner...');
                 
-                // Configura os formatos suportados
+                // Cria o leitor com configurações específicas para código de barras
                 const hints = new Map();
                 hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
                     ZXing.BarcodeFormat.EAN_13,
@@ -244,10 +244,19 @@
                     ZXing.BarcodeFormat.UPC_E
                 ]);
                 hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                const codeReader = new ZXing.BrowserMultiFormatReader(hints);
 
                 // Prepara a imagem
+                console.log('2. Preparando imagem...');
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
+                
+                // Verifica dimensões da imagem
+                console.log('Dimensões da imagem:', {
+                    naturalWidth: previewImage.naturalWidth,
+                    naturalHeight: previewImage.naturalHeight
+                });
+                
                 canvas.width = previewImage.naturalWidth;
                 canvas.height = previewImage.naturalHeight;
                 ctx.drawImage(previewImage, 0, 0);
@@ -255,32 +264,53 @@
                 let allCodes = new Set();
                 const scales = [1, 1.5, 0.75];
                 
+                // Tenta ler a imagem diretamente primeiro
+                try {
+                    console.log('3. Tentando leitura direta da imagem...');
+                    const directResult = await codeReader.decodeFromImage(previewImage);
+                    if (directResult) {
+                        console.log('Código encontrado na leitura direta:', directResult.text);
+                        allCodes.add(directResult.text);
+                    }
+                } catch (err) {
+                    console.log('Leitura direta falhou:', err.message);
+                }
+
+                // Tenta diferentes escalas
                 for (let i = 0; i < scales.length; i++) {
                     const scale = scales[i];
+                    console.log(`4. Tentando escala ${scale}x...`);
                     updateProgress(`step${i+2}`, `Tentando escala ${scale}x...`);
                     
                     try {
                         const scaledCanvas = document.createElement('canvas');
                         const sctx = scaledCanvas.getContext('2d');
-                        scaledCanvas.width = canvas.width * scale;
-                        scaledCanvas.height = canvas.height * scale;
+                        scaledCanvas.width = Math.floor(canvas.width * scale);
+                        scaledCanvas.height = Math.floor(canvas.height * scale);
                         sctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
 
-                        // Tenta ler com configuração normal
+                        // Debug: salva a imagem escalada
+                        console.log(`Dimensões da escala ${scale}x:`, {
+                            width: scaledCanvas.width,
+                            height: scaledCanvas.height
+                        });
+
                         try {
-                            const result = await codeReader.decodeFromImage(scaledCanvas);
+                            const result = await codeReader.decodeFromImage(scaledCanvas.toDataURL());
                             if (result) {
-                                allCodes.add(result.text);
                                 console.log(`Código encontrado (${scale}x):`, result.text);
+                                allCodes.add(result.text);
                             }
                         } catch (err) {
-                            console.debug(`Tentativa ${scale}x falhou:`, err);
+                            console.log(`Tentativa ${scale}x falhou:`, err.message);
                         }
 
                     } catch (err) {
-                        console.debug(`Erro na escala ${scale}:`, err);
+                        console.error(`Erro ao processar escala ${scale}:`, err);
                     }
                 }
+
+                console.log('5. Códigos encontrados:', Array.from(allCodes));
 
                 if (allCodes.size > 0) {
                     updateProgress('stepResult', `${allCodes.size} código(s) encontrado(s)!`, false);
@@ -292,7 +322,7 @@
                     status.textContent = 'Nenhum código detectado. Tente novamente.';
                 }
             } catch (err) {
-                console.error('Erro ao escanear:', err);
+                console.error('Erro geral:', err);
                 updateProgress('stepResult', 'Erro ao ler códigos. Tente novamente.', true);
                 status.textContent = 'Erro ao ler códigos. Tente novamente.';
             } finally {
