@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanner de Código de Barras</title>
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -113,151 +111,71 @@
         }
 
         #preview-image {
-            max-width: 100%;
-            display: block;
+            width: 100%;
+            max-width: 600px;
         }
 
-        .cropper-container {
-            max-height: 70vh;
-            margin: 0 auto;
-        }
-
-        .cropper-wrap-box {
-            max-height: calc(70vh - 40px);
-        }
-
-        .edit-controls {
-            position: relative;
-            z-index: 1000;
+        .controls {
             display: flex;
             gap: 10px;
             justify-content: center;
             margin: 10px 0;
             padding: 10px;
-            background: rgba(255, 255, 255, 0.9);
         }
 
-        .rotate-left {
-            background-color: #6c757d;
-        }
-
-        .rotate-right {
-            background-color: #6c757d;
-        }
-
-        .confirm-crop {
-            background-color: #28a745;
-        }
-
-        .cancel-crop {
-            background-color: #dc3545;
-        }
-
-        .loading-indicator {
+        .loading {
             display: none;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.9);
-            padding: 20px;
-            border-radius: 5px;
             text-align: center;
-        }
-
-        /* Estilo para múltiplos códigos detectados */
-        .detected-code {
-            position: absolute;
-            border: 2px solid #28a745;
-            background: rgba(40, 167, 69, 0.2);
-            pointer-events: none;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 5px;
         }
     </style>
 </head>
 <body>
     <h1>Scanner de Código de Barras</h1>
     
-    <div class="option-buttons">
-        <button class="upload-btn" id="uploadButton">Tirar Foto</button>
-    </div>
-
-    <input type="file" id="fileInput" accept="image/*" capture="environment">
-    <div id="status">Escolha uma imagem para escanear</div>
+    <button id="captureButton">Tirar Foto</button>
+    <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+    
+    <div id="status">Tire uma foto do código de barras</div>
     
     <div id="preview-container">
         <img id="preview-image">
-        <div class="edit-controls">
-            <button class="rotate-left" id="rotateLeftButton">↺ Girar</button>
-            <button class="rotate-right" id="rotateRightButton">↻ Girar</button>
-            <button class="confirm-crop" id="confirmButton">Confirmar</button>
-            <button class="cancel-crop" id="cancelButton">Cancelar</button>
+        <div class="controls">
+            <button id="tryAgainButton">Tentar Novamente</button>
+            <button id="scanButton" style="background-color: #28a745;">Ler Código</button>
         </div>
-        <div class="loading-indicator" id="loadingIndicator">
+        <div class="loading" id="loadingIndicator">
             Processando imagem...
         </div>
     </div>
     
-    <div id="result">
+    <div id="result" style="display: none;">
         <h2>Códigos Detectados:</h2>
         <ul class="code-list" id="codeList"></ul>
-        <button id="redirectButton">Ir para o Formulário</button>
-        <button id="newScanButton">Nova Foto</button>
+        <div class="controls">
+            <button id="newScanButton">Nova Foto</button>
+            <button id="redirectButton" style="background-color: #28a745;">Ir para o Formulário</button>
+        </div>
     </div>
 
     <script>
         const fileInput = document.getElementById('fileInput');
-        const uploadButton = document.getElementById('uploadButton');
+        const captureButton = document.getElementById('captureButton');
         const previewContainer = document.getElementById('preview-container');
         const previewImage = document.getElementById('preview-image');
-        const scanButton = document.getElementById('scanButton');
         const loadingIndicator = document.getElementById('loadingIndicator');
         const result = document.getElementById('result');
         let selectedSerial = '';
-        let pinchZoom;
-        let cropper = null;
-        let originalImage = null;
-
-        async function initCodeReader() {
-            const hints = new Map();
-            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                ZXing.BarcodeFormat.EAN_13,
-                ZXing.BarcodeFormat.EAN_8,
-                ZXing.BarcodeFormat.CODE_128,
-                ZXing.BarcodeFormat.CODE_39,
-                ZXing.BarcodeFormat.UPC_A,
-                ZXing.BarcodeFormat.UPC_E,
-                ZXing.BarcodeFormat.QR_CODE
-            ]);
-            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-            return new ZXing.BrowserMultiFormatReader(hints);
-        }
 
         async function processImage(file) {
             try {
                 const reader = new FileReader();
-                reader.onload = async (e) => {
-                    originalImage = e.target.result;
-                    previewImage.src = originalImage;
+                reader.onload = (e) => {
+                    previewImage.src = e.target.result;
                     previewContainer.style.display = 'block';
                     result.style.display = 'none';
-                    
-                    // Inicializa o Cropper
-                    if (cropper) {
-                        cropper.destroy();
-                    }
-                    cropper = new Cropper(previewImage, {
-                        viewMode: 1,
-                        dragMode: 'move',
-                        aspectRatio: NaN,
-                        autoCropArea: 0.9,
-                        restore: false,
-                        guides: true,
-                        center: true,
-                        highlight: false,
-                        cropBoxMovable: true,
-                        cropBoxResizable: true,
-                        toggleDragModeOnDblclick: false,
-                    });
                 };
                 reader.readAsDataURL(file);
             } catch (err) {
@@ -267,42 +185,15 @@
         }
 
         async function scanImage() {
-            if (!cropper) return;
-            
             loadingIndicator.style.display = 'block';
             try {
-                const canvas = cropper.getCroppedCanvas();
-                const codeReader = await initCodeReader();
+                const codeReader = new ZXing.BrowserMultiFormatReader();
+                const result = await codeReader.decodeFromImage(previewImage);
                 
-                // Tenta diferentes escalas para melhorar a detecção
-                const scales = [1, 1.5, 2, 0.75];
-                let allCodes = new Set();
-
-                for (let scale of scales) {
-                    const scaledCanvas = document.createElement('canvas');
-                    const ctx = scaledCanvas.getContext('2d');
-                    scaledCanvas.width = canvas.width * scale;
-                    scaledCanvas.height = canvas.height * scale;
-                    ctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-
-                    try {
-                        const result = await codeReader.decodeFromImage(scaledCanvas);
-                        if (result) {
-                            allCodes.add(result.text);
-                        }
-                    } catch (err) {
-                        console.debug('Tentativa de escala ' + scale + ' falhou');
-                    }
-                }
-
-                if (allCodes.size > 0) {
-                    if (cropper) {
-                        cropper.destroy();
-                        cropper = null;
-                    }
-                    handleSuccess(Array.from(allCodes));
+                if (result) {
+                    handleSuccess([result.text]);
                 } else {
-                    status.textContent = 'Nenhum código detectado. Tente outra foto.';
+                    status.textContent = 'Nenhum código detectado. Tente novamente.';
                 }
             } catch (err) {
                 console.error('Erro ao escanear:', err);
@@ -312,22 +203,8 @@
             }
         }
 
-        uploadButton.addEventListener('click', () => fileInput.click());
-        
-        fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files[0]) {
-                processImage(e.target.files[0]);
-            }
-        });
-
-        scanButton.addEventListener('click', scanImage);
-
         function handleSuccess(codes) {
-            if (codeReader) {
-                codeReader.reset();
-            }
-
-            video.style.display = 'none';
+            previewContainer.style.display = 'none';
             result.style.display = 'block';
             const codeList = document.getElementById('codeList');
             codeList.innerHTML = '';
@@ -345,13 +222,27 @@
                 codeList.appendChild(li);
             });
 
-            // Seleciona o primeiro código por padrão
             if (codes.length > 0) {
                 const firstCode = codeList.firstChild;
                 firstCode.style.backgroundColor = '#e8f5e9';
                 selectedSerial = codes[0];
             }
         }
+
+        // Event Listeners
+        captureButton.addEventListener('click', () => fileInput.click());
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                processImage(e.target.files[0]);
+            }
+        });
+
+        document.getElementById('scanButton').addEventListener('click', scanImage);
+
+        document.getElementById('tryAgainButton').addEventListener('click', () => {
+            fileInput.click();
+        });
 
         document.getElementById('redirectButton').addEventListener('click', () => {
             if (selectedSerial) {
@@ -363,39 +254,10 @@
 
         document.getElementById('newScanButton').addEventListener('click', () => {
             selectedSerial = '';
-            status.textContent = 'Escolha uma imagem para escanear';
-            if (cropper) {
-                cropper.destroy();
-                cropper = null;
-            }
+            status.textContent = 'Tire uma foto do código de barras';
             previewContainer.style.display = 'none';
             result.style.display = 'none';
-        });
-
-        // Eventos para os botões de edição
-        document.getElementById('rotateLeftButton').addEventListener('click', () => {
-            cropper.rotate(-90);
-        });
-
-        document.getElementById('rotateRightButton').addEventListener('click', () => {
-            cropper.rotate(90);
-        });
-
-        document.getElementById('confirmButton').addEventListener('click', () => {
-            scanImage();
-        });
-
-        document.getElementById('cancelButton').addEventListener('click', () => {
-            if (cropper) {
-                cropper.destroy();
-                previewImage.src = originalImage;
-                cropper = new Cropper(previewImage, {
-                    viewMode: 1,
-                    dragMode: 'move',
-                    aspectRatio: NaN,
-                    autoCropArea: 0.9,
-                });
-            }
+            fileInput.click();
         });
     </script>
 </body>
