@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leitor de Código de Barras</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/barcode_scanning@latest/barcode_scanning.js"></script>
     <style>
         body {
             margin: 0;
@@ -14,15 +15,16 @@
             font-family: Arial, sans-serif;
         }
 
-        button {
-            padding: 15px 30px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 10px 0;
+        #camera-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        #camera {
+            width: 100%;
+            border-radius: 10px;
         }
 
         #result {
@@ -36,6 +38,17 @@
             display: none;
         }
 
+        button {
+            padding: 15px 30px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+
         #redirectButton {
             background-color: #28a745;
         }
@@ -43,8 +56,11 @@
 </head>
 <body>
     <h1>Leitor de Código de Barras</h1>
-    <button id="scanButton">Ler Código de Barras</button>
     
+    <div id="camera-container">
+        <video id="camera" autoplay playsinline></video>
+    </div>
+
     <div id="result">
         <h2>Código Detectado:</h2>
         <p id="serialNumber"></p>
@@ -53,51 +69,58 @@
     </div>
 
     <script>
+        const video = document.getElementById('camera');
+        const result = document.getElementById('result');
+        const serialNumber = document.getElementById('serialNumber');
         let selectedSerial = '';
 
-        document.getElementById('scanButton').addEventListener('click', async () => {
+        async function startCamera() {
             try {
-                // Tenta abrir um app de scanner no Android
-                if (window.Android) {
-                    window.Android.scanBarcode();
-                }
-                // Para iOS
-                else if (window.webkit && window.webkit.messageHandlers) {
-                    window.webkit.messageHandlers.scanBarcode.postMessage("");
-                }
-                // Fallback para web
-                else {
-                    // Tenta abrir um app de scanner via URL scheme
-                    const schemes = [
-                        'zxing://scan',           // ZXing
-                        'scanbot://sdk/scan',     // Scanbot
-                        'quickmark://scan',       // QuickMark
-                        'bscan://scan',           // BarcodeScanner
-                        'intent://scan/#Intent;scheme=zxing;package=com.google.zxing.client.android;end' // Intent explícito para ZXing
-                    ];
-
-                    // Tenta cada scheme até um funcionar
-                    for (let scheme of schemes) {
-                        try {
-                            window.location.href = scheme;
-                            break;
-                        } catch (e) {
-                            console.log('Scheme não suportado:', scheme);
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Erro ao iniciar scanner:', error);
-                alert('Não foi possível iniciar o scanner. Por favor, instale um aplicativo de leitura de código de barras.');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                video.srcObject = stream;
+                startScanning();
+            } catch (err) {
+                console.error('Erro ao acessar câmera:', err);
+                alert('Erro ao acessar a câmera. Verifique as permissões.');
             }
-        });
+        }
 
-        // Função para receber o resultado do scanner
-        window.handleScanResult = function(barcode) {
-            selectedSerial = barcode;
-            document.getElementById('serialNumber').textContent = barcode;
-            document.getElementById('result').style.display = 'block';
-        };
+        function startScanning() {
+            const barcodeDetector = new window.BarcodeDetector();
+            
+            setInterval(async () => {
+                try {
+                    const barcodes = await barcodeDetector.detect(video);
+                    if (barcodes.length > 0) {
+                        const code = barcodes[0].rawValue;
+                        handleSuccess(code);
+                    }
+                } catch (err) {
+                    console.error('Erro ao ler código:', err);
+                }
+            }, 100);
+        }
+
+        function handleSuccess(code) {
+            selectedSerial = code;
+            serialNumber.textContent = code;
+            result.style.display = 'block';
+            stopCamera();
+        }
+
+        function stopCamera() {
+            const stream = video.srcObject;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            video.srcObject = null;
+        }
 
         document.getElementById('redirectButton').addEventListener('click', () => {
             if (selectedSerial) {
@@ -107,9 +130,11 @@
 
         document.getElementById('newScanButton').addEventListener('click', () => {
             selectedSerial = '';
-            document.getElementById('result').style.display = 'none';
-            document.getElementById('scanButton').click();
+            result.style.display = 'none';
+            startCamera();
         });
+
+        startCamera();
     </script>
 </body>
 </html>
