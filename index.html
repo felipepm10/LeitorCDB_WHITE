@@ -127,8 +127,34 @@
             display: none;
             text-align: center;
             padding: 20px;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             border-radius: 5px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 80%;
+        }
+
+        .progress-steps {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .progress-step {
+            margin: 5px 0;
+            display: none;
+        }
+
+        .progress-step.active {
+            display: block;
+            color: #28a745;
+        }
+
+        .progress-step.error {
+            color: #dc3545;
         }
     </style>
 </head>
@@ -147,7 +173,14 @@
             <button id="scanButton" style="background-color: #28a745;">Ler Código</button>
         </div>
         <div class="loading" id="loadingIndicator">
-            Processando imagem...
+            <div>Processando imagem...</div>
+            <div class="progress-steps">
+                <div class="progress-step" id="step1">➡️ Preparando imagem...</div>
+                <div class="progress-step" id="step2">➡️ Tentando escala 1x...</div>
+                <div class="progress-step" id="step3">➡️ Tentando escala 1.5x...</div>
+                <div class="progress-step" id="step4">➡️ Tentando escala 0.75x...</div>
+                <div class="progress-step" id="stepResult"></div>
+            </div>
         </div>
     </div>
     
@@ -184,25 +217,48 @@
             }
         }
 
+        async function updateProgress(stepId, message, isError = false) {
+            document.querySelectorAll('.progress-step').forEach(step => step.classList.remove('active', 'error'));
+            const step = document.getElementById(stepId);
+            if (step) {
+                step.textContent = `➡️ ${message}`;
+                step.classList.add('active');
+                if (isError) step.classList.add('error');
+            }
+        }
+
         async function scanImage() {
             loadingIndicator.style.display = 'block';
             try {
+                updateProgress('step1', 'Preparando imagem...');
                 const codeReader = new ZXing.BrowserMultiFormatReader();
+                
+                // Configura os formatos suportados
+                const hints = new Map();
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                    ZXing.BarcodeFormat.EAN_13,
+                    ZXing.BarcodeFormat.EAN_8,
+                    ZXing.BarcodeFormat.CODE_128,
+                    ZXing.BarcodeFormat.CODE_39,
+                    ZXing.BarcodeFormat.UPC_A,
+                    ZXing.BarcodeFormat.UPC_E
+                ]);
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+                // Prepara a imagem
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                
-                // Usa o tamanho original da imagem
                 canvas.width = previewImage.naturalWidth;
                 canvas.height = previewImage.naturalHeight;
                 ctx.drawImage(previewImage, 0, 0);
 
-                // Array para armazenar todos os códigos encontrados
                 let allCodes = new Set();
-
-                // Tenta diferentes escalas para melhorar a detecção
                 const scales = [1, 1.5, 0.75];
                 
-                for (let scale of scales) {
+                for (let i = 0; i < scales.length; i++) {
+                    const scale = scales[i];
+                    updateProgress(`step${i+2}`, `Tentando escala ${scale}x...`);
+                    
                     try {
                         const scaledCanvas = document.createElement('canvas');
                         const sctx = scaledCanvas.getContext('2d');
@@ -210,42 +266,15 @@
                         scaledCanvas.height = canvas.height * scale;
                         sctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
 
-                        // Tenta ler a imagem várias vezes com diferentes configurações
-                        const hints = new Map();
-                        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                            ZXing.BarcodeFormat.EAN_13,
-                            ZXing.BarcodeFormat.EAN_8,
-                            ZXing.BarcodeFormat.CODE_128,
-                            ZXing.BarcodeFormat.CODE_39,
-                            ZXing.BarcodeFormat.UPC_A,
-                            ZXing.BarcodeFormat.UPC_E
-                        ]);
-                        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-                        
-                        const reader = new ZXing.BrowserMultiFormatReader(hints);
-                        
+                        // Tenta ler com configuração normal
                         try {
-                            const result = await reader.decodeFromImage(scaledCanvas);
+                            const result = await codeReader.decodeFromImage(scaledCanvas);
                             if (result) {
                                 allCodes.add(result.text);
+                                console.log(`Código encontrado (${scale}x):`, result.text);
                             }
                         } catch (err) {
-                            // Ignora erros de leitura individual
-                            console.debug('Tentativa falhou:', err);
-                        }
-
-                        // Tenta novamente com diferentes configurações
-                        hints.set(ZXing.DecodeHintType.TRY_HARDER, false);
-                        const reader2 = new ZXing.BrowserMultiFormatReader(hints);
-                        
-                        try {
-                            const result = await reader2.decodeFromImage(scaledCanvas);
-                            if (result) {
-                                allCodes.add(result.text);
-                            }
-                        } catch (err) {
-                            // Ignora erros de leitura individual
-                            console.debug('Tentativa alternativa falhou:', err);
+                            console.debug(`Tentativa ${scale}x falhou:`, err);
                         }
 
                     } catch (err) {
@@ -254,15 +283,22 @@
                 }
 
                 if (allCodes.size > 0) {
-                    handleSuccess(Array.from(allCodes));
+                    updateProgress('stepResult', `${allCodes.size} código(s) encontrado(s)!`, false);
+                    setTimeout(() => {
+                        handleSuccess(Array.from(allCodes));
+                    }, 1000);
                 } else {
+                    updateProgress('stepResult', 'Nenhum código detectado. Tente novamente.', true);
                     status.textContent = 'Nenhum código detectado. Tente novamente.';
                 }
             } catch (err) {
                 console.error('Erro ao escanear:', err);
+                updateProgress('stepResult', 'Erro ao ler códigos. Tente novamente.', true);
                 status.textContent = 'Erro ao ler códigos. Tente novamente.';
             } finally {
-                loadingIndicator.style.display = 'none';
+                setTimeout(() => {
+                    loadingIndicator.style.display = 'none';
+                }, 1000);
             }
         }
 
