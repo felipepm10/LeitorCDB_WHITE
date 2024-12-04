@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leitor de Código de Barras</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/barcode_scanning@latest/barcode_scanning.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body {
             margin: 0;
@@ -73,6 +73,7 @@
         const result = document.getElementById('result');
         const serialNumber = document.getElementById('serialNumber');
         let selectedSerial = '';
+        let codeReader = null;
 
         async function startCamera() {
             try {
@@ -92,19 +93,29 @@
         }
 
         function startScanning() {
-            const barcodeDetector = new window.BarcodeDetector();
+            codeReader = new ZXing.BrowserMultiFormatReader();
             
-            setInterval(async () => {
-                try {
-                    const barcodes = await barcodeDetector.detect(video);
-                    if (barcodes.length > 0) {
-                        const code = barcodes[0].rawValue;
-                        handleSuccess(code);
+            const hints = new Map();
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                ZXing.BarcodeFormat.QR_CODE,
+                ZXing.BarcodeFormat.CODE_128,
+                ZXing.BarcodeFormat.CODE_39,
+                ZXing.BarcodeFormat.EAN_13,
+                ZXing.BarcodeFormat.EAN_8
+            ]);
+            
+            codeReader.decodeFromVideoDevice(
+                undefined,
+                'camera',
+                (result, err) => {
+                    if (result) {
+                        handleSuccess(result.text);
                     }
-                } catch (err) {
-                    console.error('Erro ao ler código:', err);
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error('Erro ao ler código:', err);
+                    }
                 }
-            }, 100);
+            );
         }
 
         function handleSuccess(code) {
@@ -115,6 +126,10 @@
         }
 
         function stopCamera() {
+            if (codeReader) {
+                codeReader.reset();
+                codeReader = null;
+            }
             const stream = video.srcObject;
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
