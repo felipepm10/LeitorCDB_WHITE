@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanner de Código de Barras</title>
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         body {
             margin: 0;
@@ -15,10 +15,10 @@
             font-family: Arial, sans-serif;
         }
 
-        #video {
+        #reader {
             width: 100%;
             max-width: 600px;
-            margin: 20px 0;
+            margin: 0 auto;
         }
 
         button {
@@ -32,11 +32,6 @@
             margin: 10px 0;
         }
 
-        #status {
-            margin: 10px 0;
-            color: #666;
-        }
-
         #result {
             display: none;
             text-align: center;
@@ -48,71 +43,6 @@
             max-width: 600px;
         }
 
-        #serialNumber {
-            font-size: 24px;
-            color: #28a745;
-            margin: 10px 0;
-            font-weight: bold;
-        }
-
-        #redirectButton {
-            background-color: #28a745;
-        }
-
-        #newScanButton {
-            background-color: #6c757d;
-        }
-
-        /* Estilo para a área de escaneamento */
-        .scan-region {
-            position: relative;
-            width: 100%;
-            max-width: 600px;
-            overflow: hidden;
-        }
-
-        #video {
-            width: 100%;
-            max-width: 600px;
-            margin: 20px 0;
-            margin: 0;
-        }
-
-        .scan-area {
-            position: absolute;
-            border: 2px solid #28a745;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
-            width: 250px;
-            height: 100px;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1;
-        }
-
-        /* Guias visuais */
-        .scan-area::before,
-        .scan-area::after {
-            content: '';
-            position: absolute;
-            background-color: #28a745;
-        }
-
-        .scan-area::before {
-            width: 40%;
-            height: 2px;
-            top: 50%;
-            left: 30%;
-        }
-
-        .scan-area::after {
-            width: 2px;
-            height: 40%;
-            left: 50%;
-            top: 30%;
-        }
-
-        /* Estilo para lista de códigos detectados */
         .code-list {
             list-style: none;
             padding: 0;
@@ -132,226 +62,95 @@
             background-color: #f8f9fa;
         }
 
-        /* Adicione uma opção para escolher o modo */
-        .mode-select {
-            margin: 10px 0;
+        #redirectButton {
+            background-color: #28a745;
+        }
+
+        #newScanButton {
+            background-color: #6c757d;
         }
     </style>
 </head>
 <body>
     <h1>Scanner de Código de Barras</h1>
-    
-    <div class="mode-select">
-        <label>
-            <input type="radio" name="scanMode" value="region" checked> Área Específica
-        </label>
-        <label>
-            <input type="radio" name="scanMode" value="multiple"> Múltiplos Códigos
-        </label>
-    </div>
-
-    <button id="startButton">Iniciar Scanner</button>
-    <div id="status">Clique no botão para iniciar</div>
-    
-    <div class="scan-region">
-        <video id="video" autoplay playsinline></video>
-        <div class="scan-area" id="scanArea"></div>
-    </div>
-    
+    <div id="reader"></div>
     <div id="result">
-        <h2>Código(s) Detectado(s):</h2>
+        <h2>Códigos Detectados:</h2>
         <ul class="code-list" id="codeList"></ul>
         <button id="redirectButton">Ir para o Formulário</button>
         <button id="newScanButton">Novo Scan</button>
     </div>
 
     <script>
-        const video = document.getElementById('video');
-        const startButton = document.getElementById('startButton');
-        const status = document.getElementById('status');
+        let html5QrCode = null;
+        let selectedSerial = '';
         const result = document.getElementById('result');
-        const serialNumber = document.getElementById('serialNumber');
-        const redirectButton = document.getElementById('redirectButton');
-        const newScanButton = document.getElementById('newScanButton');
-        let stream = null;
+        const reader = document.getElementById('reader');
 
-        let selectedMode = 'region';
-        document.querySelectorAll('input[name="scanMode"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                selectedMode = e.target.value;
-                document.querySelector('.scan-area').style.display = 
-                    selectedMode === 'region' ? 'block' : 'none';
-            });
-        });
-
-        function resetUI() {
-            video.style.display = 'block';
-            result.style.display = 'none';
-            startButton.style.display = 'block';
-            status.textContent = 'Clique no botão para iniciar';
+        function onScanSuccess(decodedText) {
+            if (html5QrCode) {
+                html5QrCode.stop();
+                showResult([decodedText]);
+            }
         }
 
         function showResult(codes) {
-            video.style.display = 'none';
+            reader.style.display = 'none';
             result.style.display = 'block';
             const codeList = document.getElementById('codeList');
             codeList.innerHTML = '';
 
-            if (Array.isArray(codes)) {
-                codes.forEach((code, index) => {
-                    const li = document.createElement('li');
-                    li.className = 'code-option';
-                    li.textContent = `Código ${index + 1}: ${code}`;
-                    li.addEventListener('click', () => {
-                        // Marca este código como selecionado
-                        document.querySelectorAll('.code-option').forEach(el => 
-                            el.style.backgroundColor = '#fff');
-                        li.style.backgroundColor = '#e8f5e9';
-                        selectedSerial = code;
-                    });
-                    codeList.appendChild(li);
-                });
-            } else {
+            codes.forEach((code, index) => {
                 const li = document.createElement('li');
                 li.className = 'code-option';
-                li.textContent = codes;
-                li.style.backgroundColor = '#e8f5e9';
-                selectedSerial = codes;
+                li.textContent = `Código ${index + 1}: ${code}`;
+                li.addEventListener('click', () => {
+                    document.querySelectorAll('.code-option').forEach(el => 
+                        el.style.backgroundColor = '#fff');
+                    li.style.backgroundColor = '#e8f5e9';
+                    selectedSerial = code;
+                });
                 codeList.appendChild(li);
+            });
+
+            // Seleciona o primeiro código por padrão
+            if (codes.length > 0) {
+                const firstCode = codeList.firstChild;
+                firstCode.style.backgroundColor = '#e8f5e9';
+                selectedSerial = codes[0];
             }
+        }
+
+        function startScanner() {
+            result.style.display = 'none';
+            reader.style.display = 'block';
             
-            status.textContent = '';
-        }
-
-        let selectedSerial = '';
-        let codeReader = null;
-
-        async function initializeScanner() {
-            if ('BarcodeDetector' in window) {
-                return new BarcodeDetector({
-                    formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-                });
-            } else {
-                // Fallback para ZXing em navegadores que não suportam BarcodeDetector
-                console.log('Usando ZXing como fallback');
-                const hints = new Map();
-                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                    ZXing.BarcodeFormat.EAN_13,
-                    ZXing.BarcodeFormat.EAN_8,
-                    ZXing.BarcodeFormat.CODE_128,
-                    ZXing.BarcodeFormat.CODE_39,
-                    ZXing.BarcodeFormat.UPC_A,
-                    ZXing.BarcodeFormat.UPC_E,
-                ]);
-                codeReader = new ZXing.BrowserMultiFormatReader(hints);
-                return null;
-            }
-        }
-
-        async function scanWithZXing() {
-            try {
-                const result = await codeReader.decodeOnceFromVideoDevice(undefined, 'video');
-                if (result) {
-                    const scanArea = document.querySelector('.scan-area').getBoundingClientRect();
-                    const videoRect = video.getBoundingClientRect();
-                    
-                    // Calcula as coordenadas relativas do código detectado
-                    const x = (result.resultPoints[0].x + result.resultPoints[1].x) / 2;
-                    const y = (result.resultPoints[0].y + result.resultPoints[1].y) / 2;
-                    
-                    if (selectedMode === 'region') {
-                        // Verifica se o código está dentro da área de scan
-                        if (x >= scanArea.left && x <= scanArea.right &&
-                            y >= scanArea.top && y <= scanArea.bottom) {
-                            stopCamera();
-                            showResult(result.text);
-                            return;
-                        }
-                    } else if (result) {
-                        stopCamera();
-                        showResult([result.text]);
-                        return;
-                    }
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    formatsToSupport: [
+                        Html5Qrcode.FORMATS.EAN_13,
+                        Html5Qrcode.FORMATS.EAN_8,
+                        Html5Qrcode.FORMATS.CODE_128,
+                        Html5Qrcode.FORMATS.CODE_39,
+                        Html5Qrcode.FORMATS.UPC_A,
+                        Html5Qrcode.FORMATS.UPC_E
+                    ]
+                },
+                onScanSuccess,
+                (error) => {
+                    // Ignora erros de leitura contínua
+                    console.debug(`Erro de leitura: ${error}`);
                 }
-                requestAnimationFrame(scanWithZXing);
-            } catch (err) {
-                console.error('Erro ZXing:', err);
-                requestAnimationFrame(scanWithZXing);
-            }
+            ).catch((err) => {
+                console.error("Erro ao iniciar o scanner:", err);
+            });
         }
 
-        startButton.addEventListener('click', async () => {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
-                });
-                video.srcObject = stream;
-
-                const barcodeDetector = await initializeScanner();
-
-                if (barcodeDetector) {
-                    // Usa BarcodeDetector (Chrome/Android)
-                    const scanner = async () => {
-                        try {
-                            const barcodes = await barcodeDetector.detect(video);
-                            if (barcodes.length > 0) {
-                                if (selectedMode === 'region') {
-                                    const scanArea = document.querySelector('.scan-area').getBoundingClientRect();
-                                    const videoRect = video.getBoundingClientRect();
-                                    
-                                    // Filtra códigos dentro da área de scan
-                                    const codesInRegion = barcodes.filter(code => {
-                                        const box = code.boundingBox;
-                                        return (
-                                            box.x >= scanArea.left - videoRect.left &&
-                                            box.x + box.width <= scanArea.right - videoRect.left &&
-                                            box.y >= scanArea.top - videoRect.top &&
-                                            box.y + box.height <= scanArea.bottom - videoRect.top
-                                        );
-                                    });
-
-                                    if (codesInRegion.length > 0) {
-                                        stopCamera();
-                                        showResult(codesInRegion[0].rawValue);
-                                        return;
-                                    }
-                                } else {
-                                    stopCamera();
-                                    showResult(barcodes.map(code => code.rawValue));
-                                    return;
-                                }
-                            }
-                            requestAnimationFrame(scanner);
-                        } catch (err) {
-                            console.error('Erro scanner:', err);
-                            requestAnimationFrame(scanner);
-                        }
-                    };
-                    scanner();
-                } else {
-                    // Usa ZXing (iOS/Safari)
-                    scanWithZXing();
-                }
-
-                status.textContent = 'Aponte a câmera para o código de barras';
-                startButton.style.display = 'none';
-
-            } catch (err) {
-                status.textContent = 'Erro ao acessar a câmera. Verifique as permissões.';
-                console.error(err);
-            }
-        });
-
-        function stopCamera() {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            if (codeReader) {
-                codeReader.reset();
-            }
-        }
-
-        redirectButton.addEventListener('click', () => {
+        document.getElementById('redirectButton').addEventListener('click', () => {
             if (selectedSerial) {
                 window.location.href = `/form?serial=${encodeURIComponent(selectedSerial)}`;
             } else {
@@ -359,10 +158,13 @@
             }
         });
 
-        newScanButton.addEventListener('click', () => {
-            resetUI();
+        document.getElementById('newScanButton').addEventListener('click', () => {
             selectedSerial = '';
+            startScanner();
         });
+
+        // Inicia o scanner automaticamente
+        startScanner();
     </script>
 </body>
 </html>
