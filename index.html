@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanner de Código de Barras</title>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body {
             margin: 0;
@@ -67,18 +68,48 @@
             position: relative;
             width: 100%;
             max-width: 600px;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            max-width: 600px;
+            margin: 20px 0;
+            margin: 0;
         }
 
         .scan-area {
             position: absolute;
             border: 2px solid #28a745;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-            /* Ajuste estes valores para mudar o tamanho da área de scan */
-            width: 80%;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.7);
+            width: 250px;
             height: 100px;
-            left: 10%;
+            left: 50%;
             top: 50%;
-            transform: translateY(-50%);
+            transform: translate(-50%, -50%);
+            z-index: 1;
+        }
+
+        /* Guias visuais */
+        .scan-area::before,
+        .scan-area::after {
+            content: '';
+            position: absolute;
+            background-color: #28a745;
+        }
+
+        .scan-area::before {
+            width: 40%;
+            height: 2px;
+            top: 50%;
+            left: 30%;
+        }
+
+        .scan-area::after {
+            width: 2px;
+            height: 40%;
+            left: 50%;
+            top: 30%;
         }
 
         /* Estilo para lista de códigos detectados */
@@ -192,6 +223,63 @@
             status.textContent = '';
         }
 
+        let selectedSerial = '';
+        let codeReader = null;
+
+        async function initializeScanner() {
+            if ('BarcodeDetector' in window) {
+                return new BarcodeDetector({
+                    formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+                });
+            } else {
+                // Fallback para ZXing em navegadores que não suportam BarcodeDetector
+                console.log('Usando ZXing como fallback');
+                const hints = new Map();
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                    ZXing.BarcodeFormat.EAN_13,
+                    ZXing.BarcodeFormat.EAN_8,
+                    ZXing.BarcodeFormat.CODE_128,
+                    ZXing.BarcodeFormat.CODE_39,
+                    ZXing.BarcodeFormat.UPC_A,
+                    ZXing.BarcodeFormat.UPC_E,
+                ]);
+                codeReader = new ZXing.BrowserMultiFormatReader(hints);
+                return null;
+            }
+        }
+
+        async function scanWithZXing() {
+            try {
+                const result = await codeReader.decodeOnceFromVideoDevice(undefined, 'video');
+                if (result) {
+                    const scanArea = document.querySelector('.scan-area').getBoundingClientRect();
+                    const videoRect = video.getBoundingClientRect();
+                    
+                    // Calcula as coordenadas relativas do código detectado
+                    const x = (result.resultPoints[0].x + result.resultPoints[1].x) / 2;
+                    const y = (result.resultPoints[0].y + result.resultPoints[1].y) / 2;
+                    
+                    if (selectedMode === 'region') {
+                        // Verifica se o código está dentro da área de scan
+                        if (x >= scanArea.left && x <= scanArea.right &&
+                            y >= scanArea.top && y <= scanArea.bottom) {
+                            stopCamera();
+                            showResult(result.text);
+                            return;
+                        }
+                    } else if (result) {
+                        stopCamera();
+                        showResult([result.text]);
+                        return;
+                    }
+                }
+                requestAnimationFrame(scanWithZXing);
+            } catch (err) {
+                console.error('Erro ZXing:', err);
+                requestAnimationFrame(scanWithZXing);
+            }
+        }
+
         startButton.addEventListener('click', async () => {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({
@@ -199,42 +287,52 @@
                 });
                 video.srcObject = stream;
 
-                const scanner = async () => {
-                    if ('BarcodeDetector' in window) {
-                        const barcodeDetector = new BarcodeDetector({
-                            formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-                        });
+                const barcodeDetector = await initializeScanner();
 
+                if (barcodeDetector) {
+                    // Usa BarcodeDetector (Chrome/Android)
+                    const scanner = async () => {
                         try {
                             const barcodes = await barcodeDetector.detect(video);
                             if (barcodes.length > 0) {
                                 if (selectedMode === 'region') {
-                                    // Modo região: pega apenas o código mais próximo do centro
-                                    const centerCode = findCenterCode(barcodes);
-                                    if (centerCode) {
+                                    const scanArea = document.querySelector('.scan-area').getBoundingClientRect();
+                                    const videoRect = video.getBoundingClientRect();
+                                    
+                                    // Filtra códigos dentro da área de scan
+                                    const codesInRegion = barcodes.filter(code => {
+                                        const box = code.boundingBox;
+                                        return (
+                                            box.x >= scanArea.left - videoRect.left &&
+                                            box.x + box.width <= scanArea.right - videoRect.left &&
+                                            box.y >= scanArea.top - videoRect.top &&
+                                            box.y + box.height <= scanArea.bottom - videoRect.top
+                                        );
+                                    });
+
+                                    if (codesInRegion.length > 0) {
                                         stopCamera();
-                                        showResult(centerCode.rawValue);
+                                        showResult(codesInRegion[0].rawValue);
                                         return;
                                     }
-                                } else if (barcodes.length >= 2) {
-                                    // Modo múltiplo: espera detectar pelo menos 2 códigos
+                                } else {
                                     stopCamera();
                                     showResult(barcodes.map(code => code.rawValue));
                                     return;
                                 }
                             }
+                            requestAnimationFrame(scanner);
                         } catch (err) {
-                            console.error('Erro na leitura:', err);
+                            console.error('Erro scanner:', err);
+                            requestAnimationFrame(scanner);
                         }
-                    } else {
-                        status.textContent = 'Seu navegador não suporta leitura de código de barras';
-                        return;
-                    }
-                    
-                    requestAnimationFrame(scanner);
-                };
+                    };
+                    scanner();
+                } else {
+                    // Usa ZXing (iOS/Safari)
+                    scanWithZXing();
+                }
 
-                scanner();
                 status.textContent = 'Aponte a câmera para o código de barras';
                 startButton.style.display = 'none';
 
@@ -244,36 +342,14 @@
             }
         });
 
-        function findCenterCode(barcodes) {
-            const scanArea = document.getElementById('scanArea').getBoundingClientRect();
-            const centerX = scanArea.left + (scanArea.width / 2);
-            const centerY = scanArea.top + (scanArea.height / 2);
-
-            return barcodes.reduce((closest, current) => {
-                const currentCenter = {
-                    x: current.boundingBox.x + (current.boundingBox.width / 2),
-                    y: current.boundingBox.y + (current.boundingBox.height / 2)
-                };
-
-                const currentDistance = Math.hypot(
-                    centerX - currentCenter.x,
-                    centerY - currentCenter.y
-                );
-
-                if (!closest || currentDistance < closest.distance) {
-                    return { code: current, distance: currentDistance };
-                }
-                return closest;
-            }, null)?.code;
-        }
-
         function stopCamera() {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
+            if (codeReader) {
+                codeReader.reset();
+            }
         }
-
-        let selectedSerial = '';
 
         redirectButton.addEventListener('click', () => {
             if (selectedSerial) {
