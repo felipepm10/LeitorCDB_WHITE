@@ -118,15 +118,23 @@
         }
 
         .cropper-container {
-            width: 100%;
-            height: 400px;
+            max-height: 70vh;
+            margin: 0 auto;
+        }
+
+        .cropper-wrap-box {
+            max-height: calc(70vh - 40px);
         }
 
         .edit-controls {
+            position: relative;
+            z-index: 1000;
             display: flex;
             gap: 10px;
             justify-content: center;
             margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.9);
         }
 
         .rotate-left {
@@ -288,6 +296,10 @@
                 }
 
                 if (allCodes.size > 0) {
+                    if (cropper) {
+                        cropper.destroy();
+                        cropper = null;
+                    }
                     handleSuccess(Array.from(allCodes));
                 } else {
                     status.textContent = 'Nenhum código detectado. Tente outra foto.';
@@ -351,10 +363,13 @@
 
         document.getElementById('newScanButton').addEventListener('click', () => {
             selectedSerial = '';
-            status.textContent = 'Clique no botão para iniciar';
-            startButton.style.display = 'block';
+            status.textContent = 'Escolha uma imagem para escanear';
+            if (cropper) {
+                cropper.destroy();
+                cropper = null;
+            }
+            previewContainer.style.display = 'none';
             result.style.display = 'none';
-            video.style.display = 'none';
         });
 
         // Eventos para os botões de edição
