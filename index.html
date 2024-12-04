@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leitor de Código de Barras</title>
-    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js" integrity="sha512-r6rDA7W6ZeQhvl8S7yRVQUKVHdexq+GAlNkNNqVC7YyIV+NwqCTJe2hDWCiffTyRNOeGEzRRJ9ifvRm/HCzGYg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         body {
             margin: 0;
@@ -78,95 +78,108 @@
     </div>
     <div id="reader"></div>
     <script>
-        let html5QrCode = null;
-        const statusMessage = document.getElementById('status-message');
-        const readerDiv = document.getElementById('reader');
+        document.addEventListener('DOMContentLoaded', function() {
+            let html5QrCode = null;
+            const statusMessage = document.getElementById('status-message');
+            const readerDiv = document.getElementById('reader');
 
-        async function checkPermissions() {
-            try {
-                const result = await navigator.permissions.query({ name: 'camera' });
-                if (result.state === 'denied') {
-                    throw new Error('Permissão da câmera foi negada. Por favor, permita o acesso à câmera nas configurações do seu navegador.');
-                }
-            } catch (err) {
-                console.log('Verificação de permissão não suportada, tentando acessar câmera diretamente');
-            }
-        }
-
-        async function startScanner() {
-            try {
-                statusMessage.className = 'info';
-                statusMessage.textContent = 'Solicitando acesso à câmera...';
-                
-                await checkPermissions();
-                
-                html5QrCode = new Html5Qrcode("reader");
-                readerDiv.style.display = 'block';
-                
-                const config = {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 },
-                    aspectRatio: 1.0,
-                    formatsToSupport: [
-                        Html5QrCode.FORMATS.EAN_13,
-                        Html5QrCode.FORMATS.EAN_8,
-                        Html5QrCode.FORMATS.CODE_128,
-                        Html5QrCode.FORMATS.CODE_39,
-                        Html5QrCode.FORMATS.UPC_A,
-                        Html5QrCode.FORMATS.UPC_E
-                    ]
-                };
-
-                const cameras = await Html5Qrcode.getCameras();
-                if (cameras && cameras.length) {
-                    await html5QrCode.start(
-                        { facingMode: "environment" },
-                        config,
-                        (decodedText) => {
-                            html5QrCode.stop();
-                            statusMessage.className = 'success';
-                            statusMessage.textContent = `Código lido com sucesso: ${decodedText}`;
-                            setTimeout(() => {
-                                window.location.href = `/form?serial=${encodeURIComponent(decodedText)}`;
-                            }, 1000);
-                        },
-                        (error) => {
-                            console.debug(`Erro de leitura: ${error}`);
-                        }
-                    );
-                    
-                    document.getElementById('startButton').disabled = true;
-                    document.getElementById('stopButton').disabled = false;
-                    statusMessage.className = 'success';
-                    statusMessage.textContent = 'Câmera ativada! Aponte para um código de barras.';
-                } else {
-                    throw new Error("Nenhuma câmera encontrada no dispositivo");
-                }
-            } catch (err) {
+            if (typeof Html5Qrcode === 'undefined') {
                 statusMessage.className = 'error';
-                statusMessage.textContent = `Erro: ${err.message || 'Falha ao acessar a câmera'}`;
-                readerDiv.style.display = 'none';
-                console.error("Erro ao iniciar o scanner:", err);
+                statusMessage.textContent = 'Erro: Biblioteca de leitura não carregada. Tente recarregar a página.';
+                return;
             }
-        }
 
-        async function stopScanner() {
-            if (html5QrCode) {
+            async function checkPermissions() {
                 try {
-                    await html5QrCode.stop();
-                    document.getElementById('startButton').disabled = false;
-                    document.getElementById('stopButton').disabled = true;
-                    readerDiv.style.display = 'none';
-                    statusMessage.className = 'info';
-                    statusMessage.textContent = 'Scanner parado. Clique em "Iniciar Scanner" para começar novamente.';
+                    const result = await navigator.permissions.query({ name: 'camera' });
+                    if (result.state === 'denied') {
+                        throw new Error('Permissão da câmera foi negada. Por favor, permita o acesso à câmera nas configurações do seu navegador.');
+                    }
                 } catch (err) {
-                    console.error("Erro ao parar o scanner:", err);
+                    console.log('Verificação de permissão não suportada, tentando acessar câmera diretamente');
                 }
             }
-        }
 
-        document.getElementById('startButton').addEventListener('click', startScanner);
-        document.getElementById('stopButton').addEventListener('click', stopScanner);
+            async function startScanner() {
+                try {
+                    statusMessage.className = 'info';
+                    statusMessage.textContent = 'Solicitando acesso à câmera...';
+                    
+                    await checkPermissions();
+                    
+                    html5QrCode = new Html5Qrcode("reader");
+                    readerDiv.style.display = 'block';
+                    
+                    const config = {
+                        fps: 10,
+                        qrbox: { width: 250, height: 250 },
+                        aspectRatio: 1.0,
+                        formatsToSupport: [
+                            Html5QrCode.FORMATS.EAN_13,
+                            Html5QrCode.FORMATS.EAN_8,
+                            Html5QrCode.FORMATS.CODE_128,
+                            Html5QrCode.FORMATS.CODE_39,
+                            Html5QrCode.FORMATS.UPC_A,
+                            Html5QrCode.FORMATS.UPC_E
+                        ]
+                    };
+
+                    const cameras = await Html5Qrcode.getCameras();
+                    if (cameras && cameras.length) {
+                        await html5QrCode.start(
+                            { facingMode: "environment" },
+                            config,
+                            (decodedText) => {
+                                html5QrCode.stop();
+                                statusMessage.className = 'success';
+                                statusMessage.textContent = `Código lido com sucesso: ${decodedText}`;
+                                setTimeout(() => {
+                                    window.location.href = `/form?serial=${encodeURIComponent(decodedText)}`;
+                                }, 1000);
+                            },
+                            (error) => {
+                                console.debug(`Erro de leitura: ${error}`);
+                            }
+                        );
+                        
+                        document.getElementById('startButton').disabled = true;
+                        document.getElementById('stopButton').disabled = false;
+                        statusMessage.className = 'success';
+                        statusMessage.textContent = 'Câmera ativada! Aponte para um código de barras.';
+                    } else {
+                        throw new Error("Nenhuma câmera encontrada no dispositivo");
+                    }
+                } catch (err) {
+                    statusMessage.className = 'error';
+                    statusMessage.textContent = `Erro: ${err.message || 'Falha ao acessar a câmera'}`;
+                    readerDiv.style.display = 'none';
+                    console.error("Erro ao iniciar o scanner:", err);
+                }
+            }
+
+            async function stopScanner() {
+                if (html5QrCode) {
+                    try {
+                        await html5QrCode.stop();
+                        document.getElementById('startButton').disabled = false;
+                        document.getElementById('stopButton').disabled = true;
+                        readerDiv.style.display = 'none';
+                        statusMessage.className = 'info';
+                        statusMessage.textContent = 'Scanner parado. Clique em "Iniciar Scanner" para começar novamente.';
+                    } catch (err) {
+                        console.error("Erro ao parar o scanner:", err);
+                    }
+                }
+            }
+
+            const startButton = document.getElementById('startButton');
+            const stopButton = document.getElementById('stopButton');
+            
+            if (startButton && stopButton) {
+                startButton.addEventListener('click', startScanner);
+                stopButton.addEventListener('click', stopScanner);
+            }
+        });
     </script>
 </body>
 </html>
