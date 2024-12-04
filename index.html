@@ -74,13 +74,67 @@
         #newScanButton {
             background-color: #6c757d;
         }
+
+        .camera-select {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .option-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .upload-btn {
+            background-color: #6c757d;
+        }
+
+        .camera-btn {
+            background-color: #007bff;
+        }
+
+        #preview-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        #preview-image {
+            width: 100%;
+            max-width: 600px;
+        }
     </style>
 </head>
 <body>
     <h1>Scanner de Código de Barras</h1>
-    <button id="startButton">Iniciar Scanner</button>
-    <div id="status">Clique no botão para iniciar</div>
-    <video id="video" autoplay playsinline></video>
+    
+    <div class="option-buttons">
+        <button class="camera-btn" id="startButton">Usar Câmera</button>
+        <button class="upload-btn" id="uploadButton">Carregar Foto</button>
+    </div>
+
+    <select id="cameraSelect" class="camera-select" style="display: none;">
+        <option value="">Selecione a câmera...</option>
+    </select>
+
+    <input type="file" id="fileInput" accept="image/*" capture="environment">
+    <div id="status">Escolha uma opção acima</div>
+    
+    <video id="video" autoplay playsinline style="display: none;"></video>
+    <div id="preview-container">
+        <img id="preview-image">
+    </div>
     
     <div id="result">
         <h2>Códigos Detectados:</h2>
@@ -92,49 +146,122 @@
     <script>
         const video = document.getElementById('video');
         const startButton = document.getElementById('startButton');
+        const uploadButton = document.getElementById('uploadButton');
+        const fileInput = document.getElementById('fileInput');
+        const cameraSelect = document.getElementById('cameraSelect');
         const status = document.getElementById('status');
         const result = document.getElementById('result');
+        const previewContainer = document.getElementById('preview-container');
+        const previewImage = document.getElementById('preview-image');
         let selectedSerial = '';
         let codeReader = null;
 
-        async function initScanner() {
-            try {
-                const hints = new Map();
-                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                    ZXing.BarcodeFormat.EAN_13,
-                    ZXing.BarcodeFormat.EAN_8,
-                    ZXing.BarcodeFormat.CODE_128,
-                    ZXing.BarcodeFormat.CODE_39,
-                    ZXing.BarcodeFormat.UPC_A,
-                    ZXing.BarcodeFormat.UPC_E,
-                ]);
+        // Inicializa o leitor de código
+        async function initCodeReader() {
+            const hints = new Map();
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                ZXing.BarcodeFormat.EAN_13,
+                ZXing.BarcodeFormat.EAN_8,
+                ZXing.BarcodeFormat.CODE_128,
+                ZXing.BarcodeFormat.CODE_39,
+                ZXing.BarcodeFormat.UPC_A,
+                ZXing.BarcodeFormat.UPC_E,
+            ]);
+            return new ZXing.BrowserMultiFormatReader(hints);
+        }
 
-                codeReader = new ZXing.BrowserMultiFormatReader(hints);
+        // Lista as câmeras disponíveis
+        async function listCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                
+                cameraSelect.innerHTML = '<option value="">Selecione a câmera...</option>';
+                videoDevices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Câmera ${index + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+                
+                if (videoDevices.length > 1) {
+                    cameraSelect.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Erro ao listar câmeras:', err);
+            }
+        }
+
+        // Inicia o scanner com a câmera selecionada
+        async function startScanner(deviceId = null) {
+            try {
+                codeReader = await initCodeReader();
                 
                 status.textContent = 'Escaneando...';
                 startButton.style.display = 'none';
                 result.style.display = 'none';
                 video.style.display = 'block';
+                previewContainer.style.display = 'none';
 
-                try {
-                    const deviceId = await codeReader.getVideoInputDevices()
-                        .then(devices => devices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('traseira'))?.deviceId);
-
-                    const scanResult = await codeReader.decodeFromInputVideoDevice(deviceId, 'video');
-                    if (scanResult) {
-                        handleSuccess([scanResult.text]);
-                    }
-                } catch (err) {
-                    console.error('Erro na leitura:', err);
-                    status.textContent = 'Erro ao ler código. Tente novamente.';
-                    startButton.style.display = 'block';
+                const scanResult = await codeReader.decodeFromInputVideoDevice(deviceId, 'video');
+                if (scanResult) {
+                    handleSuccess([scanResult.text]);
                 }
             } catch (err) {
-                console.error('Erro ao inicializar:', err);
+                console.error('Erro ao iniciar scanner:', err);
                 status.textContent = 'Erro ao acessar a câmera. Verifique as permissões.';
                 startButton.style.display = 'block';
             }
         }
+
+        // Processa imagem carregada
+        async function processImage(file) {
+            try {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    previewImage.src = e.target.result;
+                    previewContainer.style.display = 'block';
+                    video.style.display = 'none';
+                    
+                    try {
+                        codeReader = await initCodeReader();
+                        const result = await codeReader.decodeFromImage(previewImage);
+                        if (result) {
+                            handleSuccess([result.text]);
+                        }
+                    } catch (err) {
+                        status.textContent = 'Não foi possível ler o código. Tente novamente.';
+                        console.error('Erro ao ler imagem:', err);
+                    }
+                };
+                reader.readAsDataURL(file);
+            } catch (err) {
+                console.error('Erro ao processar imagem:', err);
+                status.textContent = 'Erro ao processar imagem.';
+            }
+        }
+
+        // Event Listeners
+        startButton.addEventListener('click', () => {
+            listCameras();
+            startScanner();
+        });
+
+        uploadButton.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                processImage(e.target.files[0]);
+            }
+        });
+
+        cameraSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                startScanner(e.target.value);
+            }
+        });
 
         function handleSuccess(codes) {
             if (codeReader) {
@@ -166,8 +293,6 @@
                 selectedSerial = codes[0];
             }
         }
-
-        startButton.addEventListener('click', initScanner);
 
         document.getElementById('redirectButton').addEventListener('click', () => {
             if (selectedSerial) {
