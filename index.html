@@ -355,24 +355,22 @@
         function handleSuccess(codes) {
             // Função para extrair apenas o número serial
             function extractSerial(code) {
-                // Remove espaços em branco
+                // Remove espaços em branco e caracteres especiais
                 code = code.trim();
                 
-                // Padrões possíveis: NS"12345", NS:12345, NS12345
-                const patterns = [
-                    /NS["']?(\d+)["']?/i,  // Matches NS"12345" or NS'12345'
-                    /NS:(\d+)/i,           // Matches NS:12345
-                    /NS(\d+)/i             // Matches NS12345
-                ];
-
-                for (let pattern of patterns) {
-                    const match = code.match(pattern);
-                    if (match && match[1]) {
-                        return match[1]; // Retorna apenas o número
+                // Procura especificamente por padrões que começam com NS
+                const nsPattern = /NS[S]?[^0-9A-Z]*([0-9A-Z]+)/i;
+                const match = code.match(nsPattern);
+                
+                if (match && match[1]) {
+                    // Pega exatamente 11 caracteres para o serial
+                    const serial = match[1].substring(0, 11);
+                    // Verifica se tem exatamente 11 caracteres
+                    if (serial.length === 11) {
+                        return serial;
                     }
                 }
-
-                return code; // Se não encontrar padrão, retorna o código original
+                return null;
             }
 
             previewContainer.style.display = 'none';
@@ -380,18 +378,25 @@
             const codeList = document.getElementById('codeList');
             codeList.innerHTML = '';
 
-            // Filtra e processa os códigos
-            const processedCodes = codes
-                .map(code => ({
-                    original: code,
-                    serial: extractSerial(code)
-                }))
-                .filter(item => item.serial); // Remove códigos vazios
+            // Filtra, processa os códigos e remove duplicatas
+            const processedCodes = Array.from(new Set(
+                codes
+                    .map(code => ({
+                        original: code,
+                        serial: extractSerial(code)
+                    }))
+                    .filter(item => item.serial !== null)
+                    .map(item => item.serial) // Pega apenas os seriais para remover duplicatas
+            ))
+            .map(serial => ({ // Reconstrói o objeto após remover duplicatas
+                original: codes.find(code => code.includes(serial)),
+                serial: serial
+            }));
 
             processedCodes.forEach((item, index) => {
                 const li = document.createElement('li');
                 li.className = 'code-option';
-                li.textContent = `Código ${index + 1}: ${item.serial}`;
+                li.textContent = `Serial ${index + 1}: ${item.serial}`;
                 
                 // Adiciona o código original como título para referência
                 li.title = `Código original: ${item.original}`;
@@ -400,7 +405,7 @@
                     document.querySelectorAll('.code-option').forEach(el => 
                         el.style.backgroundColor = '#fff');
                     li.style.backgroundColor = '#e8f5e9';
-                    selectedSerial = item.serial; // Usa apenas o número serial
+                    selectedSerial = item.serial;
                 });
                 codeList.appendChild(li);
             });
@@ -409,6 +414,13 @@
                 const firstCode = codeList.firstChild;
                 firstCode.style.backgroundColor = '#e8f5e9';
                 selectedSerial = processedCodes[0].serial;
+            } else {
+                // Se nenhum código NS foi encontrado
+                const li = document.createElement('li');
+                li.className = 'code-option';
+                li.textContent = 'Nenhum número serial (NS) encontrado';
+                li.style.color = '#dc3545';
+                codeList.appendChild(li);
             }
         }
 
