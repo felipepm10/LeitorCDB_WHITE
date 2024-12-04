@@ -247,31 +247,66 @@
 
         async function scanWithOCR() {
             updateProgress('step1', 'Iniciando OCR...');
+            let worker = null;
+            
             try {
-                const worker = await Tesseract.createWorker('eng');
+                updateProgress('step2', 'Carregando módulo de reconhecimento...');
+                worker = await Tesseract.createWorker();
                 
-                updateProgress('step2', 'Processando imagem...');
+                updateProgress('step3', 'Inicializando...');
+                await worker.loadLanguage('eng');
+                await worker.initialize('eng');
+                
+                // Configurações específicas para melhorar o reconhecimento de números
+                await worker.setParameters({
+                    tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                    tessedit_pageseg_mode: '6', // Assume um bloco uniforme de texto
+                });
+
+                updateProgress('step4', 'Processando imagem...');
                 const result = await worker.recognize(previewImage);
                 
                 // Procura por padrões de código de barras no texto
                 const text = result.data.text;
                 console.log('Texto detectado:', text);
                 
-                // Padrões comuns de códigos de barras (ajuste conforme necessário)
+                // Limpa o texto removendo espaços e caracteres especiais
+                const cleanText = text.replace(/[^0-9A-Z]/g, '');
+                console.log('Texto limpo:', cleanText);
+                
+                // Padrões mais específicos para códigos de barras
                 const patterns = [
-                    /\b\d{8,14}\b/g,  // Números com 8 a 14 dígitos
-                    /[A-Z0-9]{10,}/g   // Alfanuméricos com 10+ caracteres
+                    /\b\d{12,14}\b/g,    // EAN-13, EAN-14 (12-14 dígitos)
+                    /\b\d{8}\b/g,        // EAN-8 (8 dígitos)
+                    /[A-Z0-9]{10,}/g,    // Códigos alfanuméricos com 10+ caracteres
+                    /\b\d{6,}\b/g        // Qualquer sequência de 6 ou mais dígitos
                 ];
 
                 let codes = new Set();
+                
+                // Tenta encontrar padrões no texto limpo
                 patterns.forEach(pattern => {
-                    const matches = text.match(pattern);
+                    const matches = cleanText.match(pattern);
                     if (matches) {
-                        matches.forEach(match => codes.add(match));
+                        matches.forEach(match => {
+                            if (match.length >= 6) { // Apenas códigos com 6 ou mais caracteres
+                                codes.add(match);
+                            }
+                        });
                     }
                 });
 
-                await worker.terminate();
+                // Também procura no texto original para casos especiais
+                patterns.forEach(pattern => {
+                    const matches = text.match(pattern);
+                    if (matches) {
+                        matches.forEach(match => {
+                            if (match.length >= 6) {
+                                codes.add(match);
+                            }
+                        });
+                    }
+                });
 
                 if (codes.size > 0) {
                     updateProgress('stepResult', `${codes.size} código(s) encontrado(s)!`, false);
@@ -282,6 +317,11 @@
             } catch (err) {
                 console.error('Erro OCR:', err);
                 updateProgress('stepResult', 'Erro ao processar texto. Tente novamente.', true);
+                status.textContent = `Erro: ${err.message}`;
+            } finally {
+                if (worker) {
+                    await worker.terminate();
+                }
             }
         }
 
