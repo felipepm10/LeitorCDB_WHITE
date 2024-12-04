@@ -18,6 +18,7 @@
             margin: 0 auto;
             border: 1px solid #ccc;
             padding: 10px;
+            display: none; /* Inicialmente oculto */
         }
 
         #reader video {
@@ -42,22 +43,65 @@
         button:disabled {
             background-color: #ccc;
         }
+
+        #status-message {
+            text-align: center;
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .info {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
     </style>
 </head>
 <body>
     <h1>Leitor de Código de Barras</h1>
+    <div id="status-message" class="info">
+        Clique em "Iniciar Scanner" para começar
+    </div>
     <div class="buttons">
         <button id="startButton">Iniciar Scanner</button>
         <button id="stopButton" disabled>Parar Scanner</button>
     </div>
     <div id="reader"></div>
-    <p id="error-message" style="color: red; font-weight: bold;"></p>
     <script>
         let html5QrCode = null;
+        const statusMessage = document.getElementById('status-message');
+        const readerDiv = document.getElementById('reader');
+
+        async function checkPermissions() {
+            try {
+                const result = await navigator.permissions.query({ name: 'camera' });
+                if (result.state === 'denied') {
+                    throw new Error('Permissão da câmera foi negada. Por favor, permita o acesso à câmera nas configurações do seu navegador.');
+                }
+            } catch (err) {
+                console.log('Verificação de permissão não suportada, tentando acessar câmera diretamente');
+            }
+        }
 
         async function startScanner() {
             try {
+                statusMessage.className = 'info';
+                statusMessage.textContent = 'Solicitando acesso à câmera...';
+                
+                await checkPermissions();
+                
                 html5QrCode = new Html5Qrcode("reader");
+                readerDiv.style.display = 'block';
                 
                 const config = {
                     fps: 10,
@@ -80,23 +124,28 @@
                         config,
                         (decodedText) => {
                             html5QrCode.stop();
-                            alert(`Código lido: ${decodedText}`);
-                            window.location.href = `/form?serial=${encodeURIComponent(decodedText)}`;
+                            statusMessage.className = 'success';
+                            statusMessage.textContent = `Código lido com sucesso: ${decodedText}`;
+                            setTimeout(() => {
+                                window.location.href = `/form?serial=${encodeURIComponent(decodedText)}`;
+                            }, 1000);
                         },
                         (error) => {
-                            // Ignora erros de leitura contínua
                             console.debug(`Erro de leitura: ${error}`);
                         }
                     );
                     
                     document.getElementById('startButton').disabled = true;
                     document.getElementById('stopButton').disabled = false;
+                    statusMessage.className = 'success';
+                    statusMessage.textContent = 'Câmera ativada! Aponte para um código de barras.';
                 } else {
-                    throw new Error("Nenhuma câmera encontrada");
+                    throw new Error("Nenhuma câmera encontrada no dispositivo");
                 }
             } catch (err) {
-                document.getElementById("error-message").innerText =
-                    "Erro ao acessar a câmera: verifique as permissões ou use outro navegador.";
+                statusMessage.className = 'error';
+                statusMessage.textContent = `Erro: ${err.message || 'Falha ao acessar a câmera'}`;
+                readerDiv.style.display = 'none';
                 console.error("Erro ao iniciar o scanner:", err);
             }
         }
@@ -107,6 +156,9 @@
                     await html5QrCode.stop();
                     document.getElementById('startButton').disabled = false;
                     document.getElementById('stopButton').disabled = true;
+                    readerDiv.style.display = 'none';
+                    statusMessage.className = 'info';
+                    statusMessage.textContent = 'Scanner parado. Clique em "Iniciar Scanner" para começar novamente.';
                 } catch (err) {
                     console.error("Erro ao parar o scanner:", err);
                 }
