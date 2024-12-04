@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scanner de Código de Barras</title>
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pinch-zoom-js@2.3.5/dist/pinch-zoom.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -109,32 +110,39 @@
             max-width: 600px;
             margin: 20px 0;
             display: none;
-            overflow: hidden;
-            background: #f0f0f0;
-        }
-
-        .pinch-zoom-container {
-            width: 100%;
-            height: 300px;
-            overflow: hidden;
-            position: relative;
         }
 
         #preview-image {
-            max-width: none;
-            width: auto;
-            height: auto;
+            max-width: 100%;
+            display: block;
         }
 
-        .scan-controls {
-            margin: 10px 0;
+        .cropper-container {
+            width: 100%;
+            height: 400px;
+        }
+
+        .edit-controls {
             display: flex;
             gap: 10px;
             justify-content: center;
+            margin: 10px 0;
         }
 
-        .scan-button {
+        .rotate-left {
+            background-color: #6c757d;
+        }
+
+        .rotate-right {
+            background-color: #6c757d;
+        }
+
+        .confirm-crop {
             background-color: #28a745;
+        }
+
+        .cancel-crop {
+            background-color: #dc3545;
         }
 
         .loading-indicator {
@@ -169,16 +177,15 @@
     <div id="status">Escolha uma imagem para escanear</div>
     
     <div id="preview-container">
-        <div class="pinch-zoom-container">
-            <div class="pinch-zoom">
-                <img id="preview-image">
-            </div>
+        <img id="preview-image">
+        <div class="edit-controls">
+            <button class="rotate-left" id="rotateLeftButton">↺ Girar</button>
+            <button class="rotate-right" id="rotateRightButton">↻ Girar</button>
+            <button class="confirm-crop" id="confirmButton">Confirmar</button>
+            <button class="cancel-crop" id="cancelButton">Cancelar</button>
         </div>
         <div class="loading-indicator" id="loadingIndicator">
             Processando imagem...
-        </div>
-        <div class="scan-controls">
-            <button class="scan-button" id="scanButton">Escanear Códigos</button>
         </div>
     </div>
     
@@ -186,7 +193,7 @@
         <h2>Códigos Detectados:</h2>
         <ul class="code-list" id="codeList"></ul>
         <button id="redirectButton">Ir para o Formulário</button>
-        <button id="newScanButton">Nova Imagem</button>
+        <button id="newScanButton">Nova Foto</button>
     </div>
 
     <script>
@@ -199,6 +206,8 @@
         const result = document.getElementById('result');
         let selectedSerial = '';
         let pinchZoom;
+        let cropper = null;
+        let originalImage = null;
 
         async function initCodeReader() {
             const hints = new Map();
@@ -219,20 +228,28 @@
             try {
                 const reader = new FileReader();
                 reader.onload = async (e) => {
-                    previewImage.src = e.target.result;
-                    previewImage.onload = () => {
-                        previewContainer.style.display = 'block';
-                        result.style.display = 'none';
-                        
-                        // Inicializa o zoom
-                        if (pinchZoom) {
-                            pinchZoom.destroy();
-                        }
-                        pinchZoom = new PinchZoom(document.querySelector('.pinch-zoom'), {
-                            draggable: true,
-                            maxZoom: 10
-                        });
-                    };
+                    originalImage = e.target.result;
+                    previewImage.src = originalImage;
+                    previewContainer.style.display = 'block';
+                    result.style.display = 'none';
+                    
+                    // Inicializa o Cropper
+                    if (cropper) {
+                        cropper.destroy();
+                    }
+                    cropper = new Cropper(previewImage, {
+                        viewMode: 1,
+                        dragMode: 'move',
+                        aspectRatio: NaN,
+                        autoCropArea: 0.9,
+                        restore: false,
+                        guides: true,
+                        center: true,
+                        highlight: false,
+                        cropBoxMovable: true,
+                        cropBoxResizable: true,
+                        toggleDragModeOnDblclick: false,
+                    });
                 };
                 reader.readAsDataURL(file);
             } catch (err) {
@@ -242,27 +259,23 @@
         }
 
         async function scanImage() {
+            if (!cropper) return;
+            
             loadingIndicator.style.display = 'block';
             try {
+                const canvas = cropper.getCroppedCanvas();
                 const codeReader = await initCodeReader();
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
                 
-                // Usa o tamanho original da imagem
-                canvas.width = previewImage.naturalWidth;
-                canvas.height = previewImage.naturalHeight;
-                ctx.drawImage(previewImage, 0, 0);
-
                 // Tenta diferentes escalas para melhorar a detecção
                 const scales = [1, 1.5, 2, 0.75];
                 let allCodes = new Set();
 
                 for (let scale of scales) {
                     const scaledCanvas = document.createElement('canvas');
-                    const sctx = scaledCanvas.getContext('2d');
+                    const ctx = scaledCanvas.getContext('2d');
                     scaledCanvas.width = canvas.width * scale;
                     scaledCanvas.height = canvas.height * scale;
-                    sctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+                    ctx.drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
 
                     try {
                         const result = await codeReader.decodeFromImage(scaledCanvas);
@@ -277,7 +290,7 @@
                 if (allCodes.size > 0) {
                     handleSuccess(Array.from(allCodes));
                 } else {
-                    status.textContent = 'Nenhum código detectado. Tente outra imagem.';
+                    status.textContent = 'Nenhum código detectado. Tente outra foto.';
                 }
             } catch (err) {
                 console.error('Erro ao escanear:', err);
@@ -342,6 +355,32 @@
             startButton.style.display = 'block';
             result.style.display = 'none';
             video.style.display = 'none';
+        });
+
+        // Eventos para os botões de edição
+        document.getElementById('rotateLeftButton').addEventListener('click', () => {
+            cropper.rotate(-90);
+        });
+
+        document.getElementById('rotateRightButton').addEventListener('click', () => {
+            cropper.rotate(90);
+        });
+
+        document.getElementById('confirmButton').addEventListener('click', () => {
+            scanImage();
+        });
+
+        document.getElementById('cancelButton').addEventListener('click', () => {
+            if (cropper) {
+                cropper.destroy();
+                previewImage.src = originalImage;
+                cropper = new Cropper(previewImage, {
+                    viewMode: 1,
+                    dragMode: 'move',
+                    aspectRatio: NaN,
+                    autoCropArea: 0.9,
+                });
+            }
         });
     </script>
 </body>
