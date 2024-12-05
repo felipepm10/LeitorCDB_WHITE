@@ -1,191 +1,498 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor de Código de Barras</title>
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            font-family: Arial, sans-serif;
-        }
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Cadastro</title>
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: Arial, sans-serif;
+    }
 
-        #camera-container {
-            width: 100%;
-            max-width: 600px;
-            margin: 20px 0;
-            position: relative;
-        }
+    #camera-container {
+      width: 100%;
+      max-width: 600px;
+      margin: 20px 0;
+      position: relative;
+    }
 
-        #camera {
-            width: 100%;
-            border-radius: 10px;
-        }
+    #camera {
+      width: 100%;
+      border-radius: 10px;
+    }
 
-        #result {
-            margin: 20px 0;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-            width: 100%;
-            max-width: 600px;
-            text-align: center;
-            display: none;
-        }
+    #result {
+      margin: 20px 0;
+      padding: 20px;
+      background-color: #f8f9fa;
+      border-radius: 5px;
+      width: 100%;
+      max-width: 600px;
+      text-align: center;
+      display: none;
+    }
 
-        button {
-            padding: 15px 30px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 10px 0;
-        }
+    button {
+      padding: 15px 30px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 0;
+    }
 
-        #redirectButton {
-            background-color: #28a745;
-        }
-    </style>
+    #redirectButton {
+      background-color: #28a745;
+    }
+
+    .form-container {
+      display: none;
+      width: 100%;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 30px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+      width: 100%;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .save-btn {
+      background-color: #28a745;
+    }
+
+    .cancel-btn {
+      background-color: #dc3545;
+    }
+
+    .mode-switch {
+      margin: 10px 0;
+      display: flex;
+      gap: 10px;
+    }
+
+    .mode-switch button {
+      padding: 10px 20px;
+      background-color: #6c757d;
+    }
+
+    .mode-switch button.active {
+      background-color: #007bff;
+    }
+
+    .manual-input {
+      width: 100%;
+      max-width: 600px;
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+    }
+
+    .manual-input input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: inherit;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .form-group.readonly input {
+      background-color: #f8f9fa;
+      cursor: not-allowed;
+    }
+
+    .resolution-options {
+      display: flex;
+      gap: 10px;
+    }
+
+    .resolution-option {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .resolution-option.active {
+      background-color: #007bff;
+      color: white;
+      border-color: #0056b3;
+    }
+  </style>
 </head>
 <body>
-    <h1>Leitor de Código de Barras</h1>
-    
-    <div id="camera-container">
-        <video id="camera" autoplay playsinline></video>
-    </div>
+  <h1>Sistema de Cadastro</h1>
+  
+  <div class="mode-switch">
+    <button id="scanButton" class="active">Usar Scanner</button>
+    <button id="manualButton">Entrada Manual</button>
+  </div>
+  
+  <div id="manual-input" class="manual-input" style="display: none;">
+    <input type="text" id="manualSerial" placeholder="Digite o serial manualmente">
+    <button onclick="verificarManual()">Verificar</button>
+  </div>
+  
+  <div id="camera-container">
+    <video id="camera" autoplay playsinline></video>
+  </div>
+  
+  <div id="form-container" class="form-container">
+    <h2>Cadastro</h2>
+    <form id="cadastroForm">
+      <div class="form-group readonly">
+        <label for="camera_id">ID Camera</label>
+        <input type="text" id="camera_id" name="camera_id" readonly>
+      </div>
+      
+      <div class="form-group readonly">
+        <label for="client_id">ID Cliente</label>
+        <input type="text" id="client_id" name="client_id" readonly>
+      </div>
+      
+      <div class="form-group readonly">
+        <label for="serial">Serial</label>
+        <input type="text" id="serial" name="serial" readonly>
+      </div>
+      
+      <div class="form-group">
+        <label for="description">Nome Camera</label>
+        <input type="text" id="description" name="description" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="address">Endereço</label>
+        <textarea id="address" name="address" required rows="3"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label for="latitude">Latitude</label>
+        <input type="text" id="latitude" name="latitude" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="longitude">Longitude</label>
+        <input type="text" id="longitude" name="longitude" required>
+      </div>
+      
+      <div class="form-group">
+        <label>Resolution ID</label>
+        <div class="resolution-options">
+          <div class="resolution-option" data-value="2" onclick="selectResolution(this)">
+            Colab (ID 2)
+          </div>
+          <div class="resolution-option" data-value="5" onclick="selectResolution(this)">
+            Smart (ID 5)
+          </div>
+        </div>
+        <input type="hidden" id="resolution_id" name="resolution_id" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="history_days">History Days</label>
+        <input type="number" id="history_days" name="history_days" required min="1">
+      </div>
+      
+      <div class="buttons">
+        <button type="button" class="cancel-btn" onclick="novaLeitura()">Cancelar</button>
+        <button type="submit" class="save-btn">Salvar</button>
+      </div>
+    </form>
+  </div>
+  
+  <script>
+    const video = document.getElementById('camera');
+    const result = document.getElementById('result');
+    const serialNumber = document.getElementById('serialNumber');
+    let selectedSerial = '';
+    let codeReader = null;
 
-    <div id="result">
-        <h2>Código Detectado:</h2>
-        <p id="serialNumber"></p>
-        <div id="serialStatus" style="margin: 10px 0; padding: 10px; border-radius: 5px;"></div>
-        <button id="redirectButton">Preencher Formulário</button>
-        <button id="newScanButton">Nova Leitura</button>
-    </div>
-
-    <script>
-        const video = document.getElementById('camera');
-        const result = document.getElementById('result');
-        const serialNumber = document.getElementById('serialNumber');
-        let selectedSerial = '';
-        let codeReader = null;
-
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    } 
-                });
-                video.srcObject = stream;
-                startScanning();
-            } catch (err) {
-                console.error('Erro ao acessar câmera:', err);
-                alert('Erro ao acessar a câmera. Verifique as permissões.');
-            }
-        }
-
-        function startScanning() {
-            codeReader = new ZXing.BrowserMultiFormatReader();
-            
-            const hints = new Map();
-            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-                ZXing.BarcodeFormat.QR_CODE,
-                ZXing.BarcodeFormat.CODE_128,
-                ZXing.BarcodeFormat.CODE_39,
-                ZXing.BarcodeFormat.EAN_13,
-                ZXing.BarcodeFormat.EAN_8
-            ]);
-            
-            codeReader.decodeFromVideoDevice(
-                undefined,
-                'camera',
-                (result, err) => {
-                    if (result) {
-                        handleSuccess(result.text);
-                    }
-                    if (err && !(err instanceof ZXing.NotFoundException)) {
-                        console.error('Erro ao ler código:', err);
-                    }
-                }
-            );
-        }
-
-        async function checkSerial(serial) {
-            try {
-                console.log('Verificando serial:', serial);
-                const url = `https://script.google.com/macros/s/AKfycbzSTo0--es4x1VDf5UGrDmXe2fCfhwGf37ZqrxhQsVBav245XHd40IMgimfgL4CfFKfWw/exec?serial=${encodeURIComponent(serial)}`;
-                
-                const response = await fetch(url);
-                console.log('Resposta recebida:', response);
-                
-                const data = await response.json();
-                console.log('Dados recebidos:', data);
-                
-                const statusDiv = document.getElementById('serialStatus');
-                if (data.exists) {
-                    statusDiv.style.backgroundColor = '#ffebee';
-                    statusDiv.style.color = '#c62828';
-                    statusDiv.innerHTML = `Este serial já está cadastrado para: <strong>${data.name}</strong>`;
-                    document.getElementById('redirectButton').style.display = 'none';
-                } else {
-                    statusDiv.style.backgroundColor = '#e8f5e9';
-                    statusDiv.style.color = '#2e7d32';
-                    statusDiv.textContent = 'Serial disponível para cadastro';
-                    document.getElementById('redirectButton').style.display = 'block';
-                }
-            } catch (err) {
-                console.error('Erro ao verificar serial:', err);
-                const statusDiv = document.getElementById('serialStatus');
-                statusDiv.style.backgroundColor = '#fff3e0';
-                statusDiv.style.color = '#e65100';
-                statusDiv.textContent = 'Erro ao verificar serial. Tente novamente.';
-            }
-        }
-
-        function handleSuccess(code) {
-            selectedSerial = code;
-            serialNumber.textContent = code;
-            result.style.display = 'block';
-            stopCamera();
-            
-            checkSerial(code);
-        }
-
-        function stopCamera() {
-            if (codeReader) {
-                codeReader.reset();
-                codeReader = null;
-            }
-            const stream = video.srcObject;
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-            video.srcObject = null;
-        }
-
-        document.getElementById('redirectButton').addEventListener('click', () => {
-            if (selectedSerial) {
-                const formId = '1FAIpQLSdITPxKQvjtwtX6IJ-IP9BmvZNixCSnqh3KkOuL_GNOJYkeMw';
-                window.location.href = `https://docs.google.com/forms/d/e/${formId}/viewform?usp=pp_url&entry.1638703974=${encodeURIComponent(selectedSerial)}`;
-            }
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          } 
         });
+        video.srcObject = stream;
+        startScanning();
+      } catch (err) {
+        console.error('Erro ao acessar câmera:', err);
+        alert('Erro ao acessar a câmera. Verifique as permissões.');
+      }
+    }
 
-        document.getElementById('newScanButton').addEventListener('click', () => {
-            selectedSerial = '';
-            result.style.display = 'none';
-            startCamera();
-        });
+    function startScanning() {
+      codeReader = new ZXing.BrowserMultiFormatReader();
+      
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.QR_CODE,
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8
+      ]);
+      
+      codeReader.decodeFromVideoDevice(
+        undefined,
+        'camera',
+        (result, err) => {
+          if (result) {
+            handleSuccess(result.text);
+          }
+          if (err && !(err instanceof ZXing.NotFoundException)) {
+            console.error('Erro ao ler código:', err);
+          }
+        }
+      );
+    }
 
-        startCamera();
-    </script>
+    function handleSuccess(code) {
+      stopCamera();
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.exists) {
+            document.getElementById('camera_id').value = response.data.camera_id;
+            document.getElementById('client_id').value = response.data.client_id;
+            document.getElementById('serial').value = response.data.serial;
+            
+            document.getElementById('description').value = response.data.description;
+            document.getElementById('address').value = response.data.address;
+            
+            // Formata as coordenadas ao receber
+            try {
+              const latitude = formatarCoordenada(response.data.latitude);
+              const longitude = formatarCoordenada(response.data.longitude);
+              
+              document.getElementById('latitude').value = latitude;
+              document.getElementById('longitude').value = longitude;
+            } catch (error) {
+              console.error('Erro ao formatar coordenadas:', error);
+              // Em caso de erro, mostra os valores originais
+              document.getElementById('latitude').value = response.data.latitude;
+              document.getElementById('longitude').value = response.data.longitude;
+            }
+            
+            document.getElementById('history_days').value = response.data.history_days;
+            
+            const resValue = response.data.resolution_id;
+            if (resValue) {
+              const resOption = document.querySelector(`.resolution-option[data-value="${resValue}"]`);
+              if (resOption) selectResolution(resOption);
+            }
+            
+            document.getElementById('form-container').style.display = 'block';
+            alert('Dados carregados para edição.');
+          } else {
+            const mensagem = `Serial "${code}" não encontrado!\n\n` +
+                            'Possíveis causas:\n' +
+                            '- Serial digitado incorretamente\n' +
+                            '- Câmera não cadastrada no sistema\n' +
+                            '- Câmera não sincronizada com a Monuv\n\n' +
+                            'Por favor, verifique o serial e tente novamente.';
+            
+            alert(mensagem);
+            novaLeitura();
+          }
+        })
+        .withFailureHandler(function(error) {
+          alert('Erro ao verificar serial: ' + error);
+          novaLeitura();
+        })
+        .verificarSerial(code);
+    }
+
+    function stopCamera() {
+      if (codeReader) {
+        codeReader.reset();
+        codeReader = null;
+      }
+      const stream = video.srcObject;
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      video.srcObject = null;
+    }
+
+    function formatarCoordenada(valor) {
+      // Remove caracteres não numéricos exceto o sinal de menos
+      const num = String(valor).replace(/[^\d-]/g, '');
+      // Divide por 10000000 e formata com 6 casas decimais
+      return (parseFloat(num) / 10000000).toFixed(6);
+    }
+
+    document.getElementById('cadastroForm').onsubmit = function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const dados = Object.fromEntries(formData.entries());
+      
+      // Formata as coordenadas antes de enviar
+      try {
+        const latitude = formatarCoordenada(dados.latitude);
+        const longitude = formatarCoordenada(dados.longitude);
+        
+        // Valida as coordenadas
+        if (Math.abs(parseFloat(latitude)) > 90 || Math.abs(parseFloat(longitude)) > 180) {
+          alert('Coordenadas inválidas. Por favor, verifique os valores.');
+          return;
+        }
+        
+        // Atualiza os dados com as coordenadas formatadas
+        dados.latitude = latitude;
+        dados.longitude = longitude;
+        
+        google.script.run
+          .withSuccessHandler(function(response) {
+            if (response.success) {
+              alert(response.message);
+              novaLeitura();
+            } else {
+              alert(response.message);
+            }
+          })
+          .withFailureHandler(function(error) {
+            alert('Erro ao salvar: ' + error);
+          })
+          .salvarCadastro(dados);
+          
+      } catch (error) {
+        alert('Erro ao formatar coordenadas: ' + error);
+      }
+    };
+
+    function novaLeitura() {
+      document.getElementById('form-container').style.display = 'none';
+      document.getElementById('cadastroForm').reset();
+      startCamera();
+    }
+
+    // Inicia a câmera quando a página carrega
+    startCamera();
+
+    document.getElementById('scanButton').addEventListener('click', function() {
+      this.classList.add('active');
+      document.getElementById('manualButton').classList.remove('active');
+      document.getElementById('camera-container').style.display = 'block';
+      document.getElementById('manual-input').style.display = 'none';
+      startCamera();
+    });
+
+    document.getElementById('manualButton').addEventListener('click', function() {
+      this.classList.add('active');
+      document.getElementById('scanButton').classList.remove('active');
+      document.getElementById('camera-container').style.display = 'none';
+      document.getElementById('manual-input').style.display = 'flex';
+      stopCamera();
+    });
+
+    function verificarManual() {
+      const serial = document.getElementById('manualSerial').value;
+      if (serial.trim()) {
+        handleSuccess(serial);
+        document.getElementById('manualSerial').value = '';
+      } else {
+        alert('Por favor, digite um serial válido');
+      }
+    }
+
+    // Adicione evento de Enter no input manual
+    document.getElementById('manualSerial').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        verificarManual();
+      }
+    });
+
+    function selectResolution(element) {
+      document.querySelectorAll('.resolution-option').forEach(opt => {
+        opt.classList.remove('active');
+      });
+      
+      element.classList.add('active');
+      
+      document.getElementById('resolution_id').value = element.dataset.value;
+    }
+
+    // Opcional: Adicione validação em tempo real nos campos de coordenadas
+    document.getElementById('latitude').addEventListener('change', function() {
+      try {
+        const valor = formatarCoordenada(this.value);
+        if (Math.abs(parseFloat(valor)) > 90) {
+          alert('Latitude deve estar entre -90 e 90 graus');
+          this.value = '';
+        } else {
+          this.value = valor;
+        }
+      } catch (error) {
+        alert('Valor de latitude inválido');
+        this.value = '';
+      }
+    });
+
+    document.getElementById('longitude').addEventListener('change', function() {
+      try {
+        const valor = formatarCoordenada(this.value);
+        if (Math.abs(parseFloat(valor)) > 180) {
+          alert('Longitude deve estar entre -180 e 180 graus');
+          this.value = '';
+        } else {
+          this.value = valor;
+        }
+      } catch (error) {
+        alert('Valor de longitude inválido');
+        this.value = '';
+      }
+    });
+  </script>
 </body>
 </html>

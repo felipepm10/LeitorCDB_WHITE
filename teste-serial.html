@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Verificação de Serial</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .input-group {
+            margin: 20px 0;
+        }
+        input {
+            padding: 10px;
+            width: 200px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teste de Verificação de Serial</h1>
+    
+    <div class="input-group">
+        <input type="text" id="serialInput" placeholder="Digite o serial">
+        <button onclick="checkSerial()">Verificar</button>
+    </div>
+
+    <div id="result"></div>
+
+    <script>
+        async function checkSerial() {
+            const serial = document.getElementById('serialInput').value;
+            const resultDiv = document.getElementById('result');
+            
+            try {
+                console.log('Verificando serial:', serial);
+                const url = `https://jsonp.afeld.me/?url=${encodeURIComponent('https://script.google.com/macros/s/AKfycbzSTo0--es4x1VDf5UGrDmXe2fCfhwGf37ZqrxhQsVBav245XHd40IMgimfgL4CfFKfWw/exec?serial=' + serial)}`;
+                
+                resultDiv.innerHTML = 'Verificando...';
+                resultDiv.style.backgroundColor = '#f8f9fa';
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                console.log('Resposta recebida:', response);
+                const data = await response.json();
+                console.log('Dados processados:', data);
+                
+                if (data.exists) {
+                    resultDiv.style.backgroundColor = '#ffebee';
+                    resultDiv.style.color = '#c62828';
+                    resultDiv.innerHTML = `Este serial já está cadastrado para: <strong>${data.name}</strong>`;
+                } else {
+                    resultDiv.style.backgroundColor = '#e8f5e9';
+                    resultDiv.style.color = '#2e7d32';
+                    resultDiv.textContent = 'Serial disponível para cadastro';
+                }
+            } catch (err) {
+                console.error('Erro ao verificar serial:', err);
+                resultDiv.style.backgroundColor = '#fff3e0';
+                resultDiv.style.color = '#e65100';
+                resultDiv.textContent = 'Erro ao verificar serial. Tente novamente.';
+            }
+        }
+
+        document.getElementById('serialInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                checkSerial();
+            }
+        });
+    </script>
+</body>
+</html> 
